@@ -7,6 +7,7 @@ const brandSchema = new mongoose.Schema(
     description: { type: String, default: '' },
     color: { type: String, default: '#2563eb' },
     isActive: { type: Boolean, default: true, index: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId },
   },
   {
     timestamps: true,
