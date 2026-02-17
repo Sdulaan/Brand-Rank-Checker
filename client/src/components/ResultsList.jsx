@@ -17,8 +17,8 @@ function ResultsList({ selectedBrand, payload }) {
             <th className="px-4 py-3 text-left font-semibold">#</th>
             <th className="px-4 py-3 text-left font-semibold">Title & Link</th>
             <th className="px-4 py-3 text-left font-semibold">Domain</th>
+            <th className="px-4 py-3 text-left font-semibold">Matched Domain</th>
             <th className="px-4 py-3 text-left font-semibold">Badge</th>
-            <th className="px-4 py-3 text-left font-semibold">Debug</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -34,19 +34,23 @@ function ResultsList({ selectedBrand, payload }) {
                 >
                   {row.title}
                 </a>
+                {row.snippet && (
+                  <p className="mt-1 whitespace-normal break-words text-xs text-slate-700">
+                    {row.snippet}
+                  </p>
+                )}
                 <p className="mt-1 truncate text-xs text-slate-500">{row.link}</p>
               </td>
               <td className="px-4 py-3 font-mono text-xs">{row.domainHost || '-'}</td>
+              <td className="px-4 py-3 text-xs text-slate-700">
+                {row.matchedDomain?.domain || '-'}
+              </td>
               <td className="px-4 py-3">
                 <Badge
                   badge={row.badge}
                   selectedBrandColor={selectedBrand?.color}
                   matchedBrand={row.matchedBrand}
                 />
-              </td>
-              <td className="px-4 py-3 text-xs text-slate-500">
-                <p>matchType: {row.matchType}</p>
-                <p>matchedDomain: {row.matchedDomain?.domain || '-'}</p>
               </td>
             </tr>
           ))}

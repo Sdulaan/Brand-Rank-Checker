@@ -1,7 +1,7 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 const { extractHostFromLink, getRootDomain, tokenizeValue } = require('../utils/domain');
 
-const SERP_URL = 'https://serpapi.com/search.json';
+const SERPER_URL = 'https://google.serper.dev/search';
 
 const buildLookup = (domains) => {
   const mapExactHostKey = new Map();
@@ -69,10 +69,7 @@ const classifyResult = (resultHost, resultLink, lookup) => {
     return { matchedDomain: suffix, matchType: 'suffix' };
   }
 
-  const hostTokens = new Set([
-    ...tokenizeValue(resultHost),
-    ...tokenizeValue(resultLink),
-  ]);
+  const hostTokens = new Set([...tokenizeValue(resultHost), ...tokenizeValue(resultLink)]);
 
   const tokenCandidates = [];
   hostTokens.forEach((token) => {
@@ -99,21 +96,23 @@ const classifyResult = (resultHost, resultLink, lookup) => {
   return { matchedDomain: null, matchType: 'none' };
 };
 
-const fetchSerpResults = async ({ apiKey, query, gl = 'id', hl = 'id', num = 10 }) => {
-  const response = await axios.get(SERP_URL, {
-    params: {
-      engine: 'google',
+const fetchSerpResults = async ({ apiKey, query, gl = 'id', hl = 'id', num = 10 }) =>
+  axios.post(
+    SERPER_URL,
+    {
       q: query,
       gl,
       hl,
       num,
-      api_key: apiKey,
     },
-    timeout: 20000,
-  });
-
-  return response.data;
-};
+    {
+      headers: {
+        'X-API-KEY': apiKey,
+        'Content-Type': 'application/json',
+      },
+      timeout: 20000,
+    }
+  );
 
 module.exports = {
   fetchSerpResults,

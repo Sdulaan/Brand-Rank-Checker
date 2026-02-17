@@ -1,15 +1,13 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const brandRoutes = require('./routes/brandRoutes');
 const domainRoutes = require('./routes/domainRoutes');
 const createSerpRoutes = require('./routes/serpRoutes');
-const createSerpController = require('./controllers/serpController');
-const { InMemoryCache } = require('./services/cacheService');
+const adminRoutes = require('./routes/adminRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
-const createApp = ({ serpApiKey }) => {
+const createApp = ({ serpController }) => {
   const app = express();
-  const cache = new InMemoryCache();
-  const serpController = createSerpController({ apiKey: serpApiKey, cache });
 
   app.use(cors());
   app.use(express.json());
@@ -21,6 +19,8 @@ const createApp = ({ serpApiKey }) => {
   app.use('/api/brands', brandRoutes);
   app.use('/api/domains', domainRoutes);
   app.use('/api/serp', createSerpRoutes(serpController));
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/analytics', analyticsRoutes);
 
   app.use((err, req, res, next) => {
     console.error(err);
