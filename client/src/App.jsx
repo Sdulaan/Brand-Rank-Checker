@@ -36,7 +36,7 @@ import {
 } from './services/api';
 
 function App() {
-  const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
+  const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://url-rank-checker.onrender.com';
 
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
