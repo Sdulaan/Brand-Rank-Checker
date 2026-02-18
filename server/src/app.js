@@ -18,8 +18,8 @@ const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
 
   app.use(cors({
     origin: [
-      'https://url-rank-checker.vercel.app/', // Replace with your actual Vercel domain
-      'http://localhost:5173', // Local dev
+      'https://url-rank-checker.vercel.app', // No trailing slash
+      'http://localhost:5173',
     ],
     credentials: true,
   }));
