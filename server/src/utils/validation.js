@@ -25,13 +25,12 @@ const supportedCountrySchema = z.enum([
   'ru',
   'za',
 ]);
-const supportedLanguageSchema = z.enum(['id', 'en', 'hi', 'th', 'vi', 'ja', 'ko', 'zh-CN']);
 
 const serpCheckSchema = z.object({
   brandId: mongoIdSchema,
   query: z.string().trim().optional(),
   country: supportedCountrySchema.optional(),
-  language: supportedLanguageSchema.optional(),
+  isMobile: z.boolean().optional(),
 });
 
 module.exports = {

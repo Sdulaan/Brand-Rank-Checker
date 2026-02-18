@@ -5,28 +5,43 @@ import CheckPanel from './components/CheckPanel';
 import ResultsList from './components/ResultsList';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import AdminPanel from './components/AdminPanel';
+import LoginPage from './components/LoginPage';
+import ProfilePanel from './components/ProfilePanel';
+import UserManagementPanel from './components/UserManagementPanel';
+import DomainManagementPanel from './components/DomainManagementPanel';
+import DomainActivityLogPanel from './components/DomainActivityLogPanel';
 import {
   addAdminApiKey,
   checkTopTen,
+  createDomain,
+  createUser,
+  deleteDomain,
   deleteAdminApiKey,
   getAdminDashboard,
+  getAuthToken,
   getBrands,
+  getDomainActivityLogs,
+  getDomains,
+  getMe,
   getRankingHistory,
+  getUsers,
+  login,
   runAutoNow,
+  setAuthToken,
   stopAutoRun,
   updateAdminApiKey,
   updateAdminSchedule,
+  updateMyPassword,
+  updateMyProfile,
 } from './services/api';
-
-const TABS = [
-  { id: 'checker', label: 'Manual Checker' },
-  { id: 'analytics', label: 'Ranking Analytics' },
-  { id: 'admin', label: 'Admin Config' },
-];
 
 function App() {
   const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
+
+  const [authReady, setAuthReady] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [tab, setTab] = useState('checker');
+
   const [brands, setBrands] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [resultsByBrand, setResultsByBrand] = useState({});
@@ -44,6 +59,51 @@ function App() {
   const [autoRunActionLoading, setAutoRunActionLoading] = useState(false);
 
   useEffect(() => {
+    const bootstrapAuth = async () => {
+      try {
+        if (!getAuthToken()) {
+          setAuthReady(true);
+          return;
+        }
+
+        const me = await getMe();
+        setCurrentUser(me);
+      } catch (err) {
+        setAuthToken('');
+        setCurrentUser(null);
+      } finally {
+        setAuthReady(true);
+      }
+    };
+
+    bootstrapAuth();
+  }, []);
+
+  const isAdmin = currentUser?.role === 'admin';
+
+  const tabs = useMemo(() => {
+    if (!isAdmin) {
+      return [
+        { id: 'checker', label: 'Manual Checker' },
+        { id: 'domains', label: 'Domains' },
+        { id: 'profile', label: 'My Profile' },
+      ];
+    }
+
+    return [
+      { id: 'checker', label: 'Manual Checker' },
+      { id: 'domains', label: 'Domains' },
+      { id: 'analytics', label: 'Ranking Analytics' },
+      { id: 'admin', label: 'Admin Config' },
+      { id: 'domain-logs', label: 'Domain Logs' },
+      { id: 'users', label: 'User Management' },
+      { id: 'profile', label: 'My Profile' },
+    ];
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!authReady || !currentUser) return;
+
     const loadBrands = async () => {
       try {
         const list = await getBrands();
@@ -57,18 +117,33 @@ function App() {
     };
 
     loadBrands();
-  }, []);
+  }, [authReady, currentUser]);
 
   const selectedResult = useMemo(() => {
     if (!selectedBrand) return null;
     return resultsByBrand[selectedBrand._id] || null;
   }, [resultsByBrand, selectedBrand]);
 
-  const runCheck = async ({ brandId, query, country, language }) => {
+  const handleLogin = async ({ email, password }) => {
+    const data = await login({ email, password });
+    setCurrentUser(data.user);
+    setTab('checker');
+  };
+
+  const logout = () => {
+    setAuthToken('');
+    setCurrentUser(null);
+    setBrands([]);
+    setSelectedBrand(null);
+    setResultsByBrand({});
+    setTab('checker');
+  };
+
+  const runCheck = async ({ brandId, query, country, isMobile }) => {
     setLoading(true);
     setError('');
     try {
-      const response = await checkTopTen({ brandId, query, country, language });
+      const response = await checkTopTen({ brandId, query, country, isMobile });
       setResultsByBrand((prev) => ({
         ...prev,
         [brandId]: response,
@@ -82,6 +157,7 @@ function App() {
 
   useEffect(() => {
     const loadAnalytics = async () => {
+      if (!isAdmin) return;
       if (tab !== 'analytics' || !selectedBrand?._id) return;
       setAnalyticsLoading(true);
       setAnalyticsError('');
@@ -96,12 +172,11 @@ function App() {
     };
 
     loadAnalytics();
-  }, [tab, selectedBrand?._id, analyticsRange]);
+  }, [tab, selectedBrand?._id, analyticsRange, isAdmin]);
 
   const refreshAdminDashboard = async ({ showLoader = true } = {}) => {
-    if (showLoader) {
-      setAdminLoading(true);
-    }
+    if (!isAdmin) return;
+    if (showLoader) setAdminLoading(true);
     setAdminError('');
     try {
       const data = await getAdminDashboard();
@@ -109,20 +184,19 @@ function App() {
     } catch (err) {
       setAdminError(err.message || 'Failed to load admin dashboard');
     } finally {
-      if (showLoader) {
-        setAdminLoading(false);
-      }
+      if (showLoader) setAdminLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!isAdmin) return;
     if (tab === 'admin') {
       refreshAdminDashboard({ showLoader: true });
     }
-  }, [tab]);
+  }, [tab, isAdmin]);
 
   useEffect(() => {
-    if (tab !== 'admin') return undefined;
+    if (!isAdmin || tab !== 'admin') return undefined;
 
     const socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
@@ -138,7 +212,7 @@ function App() {
       socket.off('admin:dashboard-updated', onDashboardUpdated);
       socket.disconnect();
     };
-  }, [tab, socketUrl]);
+  }, [tab, socketUrl, isAdmin]);
 
   const saveSchedule = async (payload) => {
     try {
@@ -200,25 +274,56 @@ function App() {
     }
   };
 
+  const handleUpdateProfile = async (payload) => {
+    const me = await updateMyProfile(payload);
+    setCurrentUser(me);
+  };
+
+  const loadDomains = () => getDomains();
+  const addDomain = (payload) => createDomain(payload);
+  const removeDomain = (domainId) => deleteDomain(domainId);
+
+  if (!authReady) {
+    return <div className="p-4 text-sm text-slate-600">Loading...</div>;
+  }
+
+  if (!currentUser) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 lg:flex">
       <BrandSidebar brands={brands} selectedBrandId={selectedBrand?._id} onSelect={setSelectedBrand} />
 
       <main className="flex-1">
         <header className="border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
-          <div className="flex flex-wrap gap-2">
-            {TABS.map((item) => (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              {tabs.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setTab(item.id)}
+                  className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                    tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-600">
+                {currentUser.username} ({currentUser.role})
+              </span>
               <button
-                key={item.id}
                 type="button"
-                onClick={() => setTab(item.id)}
-                className={`rounded-md px-3 py-2 text-sm font-semibold ${
-                  tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                onClick={logout}
+                className="rounded-md bg-slate-200 px-3 py-1.5 text-xs font-semibold"
               >
-                {item.label}
+                Logout
               </button>
-            ))}
+            </div>
           </div>
         </header>
 
@@ -237,7 +342,16 @@ function App() {
           </>
         )}
 
-        {tab === 'analytics' && (
+        {tab === 'domains' && (
+          <DomainManagementPanel
+            brands={brands}
+            onLoadDomains={loadDomains}
+            onCreateDomain={addDomain}
+            onDeleteDomain={removeDomain}
+          />
+        )}
+
+        {isAdmin && tab === 'analytics' && (
           <AnalyticsPanel
             selectedBrand={selectedBrand}
             data={analyticsData}
@@ -248,7 +362,7 @@ function App() {
           />
         )}
 
-        {tab === 'admin' && (
+        {isAdmin && tab === 'admin' && (
           <AdminPanel
             dashboard={adminDashboard}
             loading={adminLoading}
@@ -260,6 +374,22 @@ function App() {
             onRunNow={triggerAutoRun}
             onStopRun={triggerStopAutoRun}
             runActionLoading={autoRunActionLoading}
+          />
+        )}
+
+        {isAdmin && tab === 'users' && (
+          <UserManagementPanel onLoadUsers={getUsers} onCreateUser={createUser} />
+        )}
+
+        {isAdmin && tab === 'domain-logs' && (
+          <DomainActivityLogPanel onLoadLogs={getDomainActivityLogs} />
+        )}
+
+        {tab === 'profile' && (
+          <ProfilePanel
+            user={currentUser}
+            onUpdateProfile={handleUpdateProfile}
+            onUpdatePassword={updateMyPassword}
           />
         )}
       </main>

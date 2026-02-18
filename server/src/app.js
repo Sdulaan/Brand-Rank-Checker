@@ -1,13 +1,20 @@
 ﻿const express = require('express');
 const cors = require('cors');
+const createAuthController = require('./controllers/authController');
 const brandRoutes = require('./routes/brandRoutes');
 const domainRoutes = require('./routes/domainRoutes');
 const createSerpRoutes = require('./routes/serpRoutes');
+const createAuthRoutes = require('./routes/authRoutes');
+const createUserRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const { createAuthMiddleware } = require('./middleware/auth');
+const { USER_ROLES } = require('./models/User');
 
-const createApp = ({ serpController }) => {
+const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
   const app = express();
+  const authMiddleware = createAuthMiddleware({ jwtSecret });
+  const authController = createAuthController({ jwtSecret, jwtExpiresIn });
 
   app.use(cors());
   app.use(express.json());
@@ -16,11 +23,24 @@ const createApp = ({ serpController }) => {
     res.json({ ok: true });
   });
 
-  app.use('/api/brands', brandRoutes);
-  app.use('/api/domains', domainRoutes);
-  app.use('/api/serp', createSerpRoutes(serpController));
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/analytics', analyticsRoutes);
+  app.use('/api/auth', createAuthRoutes(authController, authMiddleware));
+
+  app.use('/api/brands', authMiddleware.authenticate, brandRoutes);
+  app.use('/api/domains', authMiddleware.authenticate, domainRoutes);
+  app.use('/api/serp', authMiddleware.authenticate, createSerpRoutes(serpController));
+  app.use(
+    '/api/admin',
+    authMiddleware.authenticate,
+    authMiddleware.authorizeRoles(USER_ROLES.ADMIN),
+    adminRoutes
+  );
+  app.use(
+    '/api/analytics',
+    authMiddleware.authenticate,
+    authMiddleware.authorizeRoles(USER_ROLES.ADMIN),
+    analyticsRoutes
+  );
+  app.use('/api/users', createUserRoutes(authMiddleware, USER_ROLES));
 
   app.use((err, req, res, next) => {
     console.error(err);

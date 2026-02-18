@@ -9,6 +9,7 @@ const { parseEnvKeys, ensureSettings, applyBaselineFromEnv } = require('./servic
 const { createKeyRotationService } = require('./services/keyRotationService');
 const { createSerpRunService } = require('./services/serpRunService');
 const { createAutoCheckScheduler } = require('./services/autoCheckScheduler');
+const { ensureInitialAdmin } = require('./services/userBootstrapService');
 
 const bootstrap = async () => {
   await connectDb(env.mongoUri);
@@ -19,13 +20,22 @@ const bootstrap = async () => {
     baselineRemaining: env.serperBaselineRemaining,
     baselineKeyName: env.serperBaselineKeyName,
   });
+  await ensureInitialAdmin({
+    email: env.initialAdminEmail,
+    username: env.initialAdminUsername,
+    password: env.initialAdminPassword,
+  });
 
   const cache = new InMemoryCache();
   const keyRotationService = createKeyRotationService();
   const serpRunService = createSerpRunService({ cache, keyRotationService });
   const serpController = createSerpController({ serpRunService });
 
-  const app = createApp({ serpController });
+  const app = createApp({
+    serpController,
+    jwtSecret: env.jwtSecret,
+    jwtExpiresIn: env.jwtExpiresIn,
+  });
   app.locals.serpRunService = serpRunService;
   app.locals.serperMonthlyLimit = env.serperMonthlyLimit;
 

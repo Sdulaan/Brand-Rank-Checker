@@ -20,5 +20,10 @@ module.exports = {
       ? Number(process.env.SERPER_BASELINE_REMAINING)
       : null,
   serperBaselineKeyName: process.env.SERPER_BASELINE_KEY_NAME || '',
+  jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  initialAdminEmail: process.env.INITIAL_ADMIN_EMAIL || 'admin@200m.website',
+  initialAdminUsername: process.env.INITIAL_ADMIN_USERNAME || 'Admin',
+  initialAdminPassword: process.env.INITIAL_ADMIN_PASSWORD || 'admin@1234',
   port: Number(process.env.PORT) || 4000,
 };

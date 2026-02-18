@@ -8,6 +8,7 @@ const {
   getAdminDashboard,
   runAutoNow,
   stopAutoRun,
+  getDomainActivityLogs,
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -18,6 +19,7 @@ router.post('/settings/keys', addApiKey);
 router.patch('/settings/keys/:keyId', updateApiKey);
 router.delete('/settings/keys/:keyId', deleteApiKey);
 router.get('/dashboard', getAdminDashboard);
+router.get('/domain-logs', getDomainActivityLogs);
 router.post('/run-now', runAutoNow);
 router.post('/stop-run', stopAutoRun);
 

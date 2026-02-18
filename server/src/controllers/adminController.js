@@ -270,6 +270,24 @@ const stopAutoRun = async (req, res, next) => {
   }
 };
 
+const getDomainActivityLogs = async (req, res, next) => {
+  try {
+    const { DomainActivityLog } = require('../models/DomainActivityLog');
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 100;
+
+    const logs = await DomainActivityLog.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('brand', 'code name')
+      .populate('actor', 'username email role');
+
+    return res.json(logs);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   getAdminSettings,
   updateSchedule,
@@ -279,4 +297,5 @@ module.exports = {
   getAdminDashboard,
   runAutoNow,
   stopAutoRun,
+  getDomainActivityLogs,
 };

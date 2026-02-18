@@ -40,25 +40,12 @@ const summarizeResults = (results) => {
   };
 };
 
-const DEFAULT_LANGUAGE_BY_COUNTRY = {
-  id: 'id',
-  in: 'hi',
-  th: 'th',
-  vn: 'vi',
-  jp: 'ja',
-  kr: 'ko',
-  cn: 'zh-CN',
-};
-
-const resolveLanguage = (countryCode, requestedLanguage) =>
-  requestedLanguage || DEFAULT_LANGUAGE_BY_COUNTRY[countryCode] || 'en';
-
 const createSerpRunService = ({ cache, keyRotationService }) => {
   const runCheckForBrand = async ({
     brandId,
     query,
     country = 'id',
-    language,
+    isMobile = false,
     trigger = 'manual',
     skipCache = false,
   }) => {
@@ -71,8 +58,8 @@ const createSerpRunService = ({ cache, keyRotationService }) => {
 
     const queryValue = query?.trim() || brand.code || brand.name;
     const countryCode = (country || 'id').toLowerCase();
-    const params = { gl: countryCode, hl: resolveLanguage(countryCode, language), num: 10 };
-    const cacheKey = `${brand._id.toString()}::${queryValue}::${params.gl}::${params.hl}`;
+    const params = { gl: countryCode, hl: 'id', num: 10, device: isMobile ? 'mobile' : 'desktop' };
+    const cacheKey = `${brand._id.toString()}::${queryValue}::${params.gl}::${params.hl}::${params.device}`;
 
     if (!skipCache) {
       const cached = cache.get(cacheKey);
@@ -143,18 +130,20 @@ const createSerpRunService = ({ cache, keyRotationService }) => {
       keyRemaining,
     });
 
-    await SerpRun.create({
-      brand: brand._id,
-      query: queryValue,
-      trigger,
-      checkedAt: new Date(checkedAt),
-      params,
-      keyId,
-      keyName,
-      keyRemaining,
-      ...summary,
-      results,
-    });
+    if (trigger === 'auto') {
+      await SerpRun.create({
+        brand: brand._id,
+        query: queryValue,
+        trigger,
+        checkedAt: new Date(checkedAt),
+        params,
+        keyId,
+        keyName,
+        keyRemaining,
+        ...summary,
+        results,
+      });
+    }
 
     cache.set(cacheKey, payload);
     return payload;

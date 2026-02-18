@@ -96,7 +96,7 @@ const classifyResult = (resultHost, resultLink, lookup) => {
   return { matchedDomain: null, matchType: 'none' };
 };
 
-const fetchSerpResults = async ({ apiKey, query, gl = 'id', hl = 'id', num = 10 }) =>
+const fetchSerpResults = async ({ apiKey, query, gl = 'id', hl = 'id', num = 10, device = 'desktop' }) =>
   axios.post(
     SERPER_URL,
     {
@@ -104,6 +104,7 @@ const fetchSerpResults = async ({ apiKey, query, gl = 'id', hl = 'id', num = 10 
       gl,
       hl,
       num,
+      device,
     },
     {
       headers: {

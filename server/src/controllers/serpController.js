@@ -9,7 +9,7 @@ const createSerpController = ({ serpRunService }) => {
         brandId: payload.brandId,
         query: payload.query,
         country: payload.country,
-        language: payload.language,
+        isMobile: payload.isMobile,
         trigger: 'manual',
       });
 

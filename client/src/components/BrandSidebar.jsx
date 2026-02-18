@@ -13,7 +13,7 @@ function BrandSidebar({ brands, selectedBrandId, onSelect }) {
   }, [brands, search]);
 
   return (
-    <aside className="w-full border-r border-slate-200 bg-white p-4 lg:w-80">
+    <aside className="w-full border-r border-slate-200 bg-white p-4 lg:sticky lg:top-0 lg:h-screen lg:w-80 lg:shrink-0">
       <h2 className="mb-3 text-lg font-semibold">Brands</h2>
       <input
         value={search}
@@ -22,7 +22,7 @@ function BrandSidebar({ brands, selectedBrandId, onSelect }) {
         placeholder="Search code or name..."
       />
 
-      <div className="space-y-2 overflow-y-auto lg:max-h-[calc(100vh-180px)]">
+      <div className="space-y-2 overflow-y-auto lg:max-h-[calc(100vh-150px)]">
         {filteredBrands.map((brand) => {
           const active = selectedBrandId === brand._id;
           return (

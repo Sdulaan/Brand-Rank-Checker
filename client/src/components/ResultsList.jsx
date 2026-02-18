@@ -23,7 +23,10 @@ function ResultsList({ selectedBrand, payload }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {payload.results.map((row) => (
-            <tr key={`${row.rank}-${row.link}`}>
+            <tr
+              key={`${row.rank}-${row.link}`}
+              className={row.badge === 'OWN' ? 'bg-emerald-100/90 hover:bg-emerald-100' : ''}
+            >
               <td className="px-4 py-3 font-semibold">{row.rank}</td>
               <td className="px-4 py-3">
                 <a

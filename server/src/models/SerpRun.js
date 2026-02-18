@@ -35,6 +35,7 @@ const serpRunSchema = new mongoose.Schema(
       gl: { type: String, default: 'id' },
       hl: { type: String, default: 'id' },
       num: { type: Number, default: 10 },
+      device: { type: String, default: 'desktop' },
     },
     keyId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     keyName: { type: String, default: '' },
