@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AnalyticsPanel from './AnalyticsPanel';
+import ComparePanel from './ComparePanel';
 
 const toExternalUrl = (domain) => {
   if (!domain) return '#';
@@ -18,7 +19,7 @@ const formatBrandLabel = (brand) => {
   return `${code} - ${name}`;
 };
 
-// ─── Add-domain form ──────────────────────────────────────────────────────────
+// ─── Add-domain form (admin only) ─────────────────────────────────────────────
 function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
   const [domain, setDomain] = useState('');
   const [note, setNote] = useState('');
@@ -27,6 +28,7 @@ function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (!selectedBrand) return;
     setSubmitting(true);
     setError('');
     try {
@@ -42,10 +44,8 @@ function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">Add Domain</h2>
-      <p className="mt-1 text-xs text-slate-500">Associate a domain with a brand.</p>
-      <form onSubmit={submit} className="mt-4 grid gap-3 lg:grid-cols-[220px_1fr_1fr_auto]">
+    <div className="rounded-lg border border-blue-400 bg-white p-4 shadow-md">
+      <form onSubmit={submit} className="mt-1 grid gap-3 lg:grid-cols-[220px_1fr_1fr_auto]">
         <div className="flex items-center gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-3 py-2">
           <span
             className="h-3 w-3 shrink-0 rounded-full"
@@ -70,7 +70,7 @@ function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
         />
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !selectedBrand}
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? 'Adding...' : 'Add Domain'}
@@ -81,50 +81,7 @@ function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
   );
 }
 
-// ─── Domain card ──────────────────────────────────────────────────────────────
-function DomainCard({ item, isSelected, onSelect, onDelete }) {
-  return (
-    <div
-      className={`cursor-pointer rounded-lg border p-3 transition ${isSelected
-        ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-        : 'border-slate-200 bg-white hover:bg-slate-50'
-        }`}
-      onClick={() => onSelect(item)}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <a
-            href={toExternalUrl(item.domain)}
-            target="_blank"
-            rel="noreferrer"
-            className="block truncate font-medium text-indigo-700 hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {item.domain}
-          </a>
-          {item.note && (
-            <p className="mt-0.5 truncate text-xs text-slate-500">{item.note}</p>
-          )}
-          <p className="mt-1 text-xs text-slate-400">
-            {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(item._id);
-          }}
-          className="shrink-0 rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Analytics panel wrapper (brand-level or domain-level) ───────────────────
+// ─── Analytics panel wrapper ───────────────────────────────────────────────────
 function AnalyticsInline({ brand, domainItem, onGetRankingHistory }) {
   const [range, setRange] = useState('7d');
   const [data, setData] = useState(null);
@@ -150,10 +107,9 @@ function AnalyticsInline({ brand, domainItem, onGetRankingHistory }) {
     return () => { cancelled = true; };
   }, [brand?._id, range]);
 
-  // If a specific domain is focused, filter domainTrends to that domain only
   const displayData = useMemo(() => {
     if (!data) return null;
-    if (!domainItem) return data; // brand-level: show all domains
+    if (!domainItem) return data;
     const domainHost = domainItem.domain;
     const filteredTrends = (data.domainTrends || []).filter(
       (t) => t.domain === domainHost || t.domainHostKey?.includes(domainHost)
@@ -188,13 +144,12 @@ function DomainManagementPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [view, setView] = useState('brand');
+  const [checkedIds, setCheckedIds] = useState([]);
 
-  // null = no analytics; 'brand' = brand-level; domain object = domain-level
-  const [analyticsTarget, setAnalyticsTarget] = useState(null);
-
-  // Clear selections when brand changes
   useEffect(() => {
-    setAnalyticsTarget(isAdmin ? 'brand' : null);
+    setView('brand');
+    setCheckedIds([]);
     setSearch('');
   }, [selectedBrand?._id]);
 
@@ -211,18 +166,15 @@ function DomainManagementPanel({
     }
   };
 
-  useEffect(() => {
-    loadDomains();
-  }, []);
+  useEffect(() => { loadDomains(); }, []);
 
   const remove = async (id) => {
     const target = domains.find((item) => item._id === id);
     if (!window.confirm(`Delete domain "${target?.domain || ''}"? This cannot be undone.`)) return;
     try {
       await onDeleteDomain(id);
-      if (analyticsTarget && analyticsTarget !== 'brand' && analyticsTarget._id === id) {
-        setAnalyticsTarget(null);
-      }
+      setCheckedIds((prev) => prev.filter((c) => c !== id));
+      if (view?._id === id) setView('brand');
       await loadDomains();
     } catch (err) {
       setError(err.message || 'Failed to delete domain');
@@ -240,159 +192,244 @@ function DomainManagementPanel({
     });
   }, [domains, selectedBrand, search]);
 
-  const handleBrandHeaderClick = () => {
-    if (!isAdmin) return;
-    // Toggle brand analytics — clicking again closes it
-    setAnalyticsTarget((prev) => (prev === 'brand' ? null : 'brand'));
-  };
+  const checkedDomains = useMemo(
+    () => brandDomains.filter((d) => checkedIds.includes(d._id)),
+    [brandDomains, checkedIds]
+  );
 
-  const handleDomainSelect = (domainItem) => {
-    if (!isAdmin) return;
-    setAnalyticsTarget((prev) =>
-      prev !== 'brand' && prev?._id === domainItem._id ? null : domainItem
+  const toggleCheck = (id) => {
+    setCheckedIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
     );
   };
 
-  // Determine what to show in the analytics panel
-  const analyticsIsBrand = analyticsTarget === 'brand';
-  const analyticsIsDomain = analyticsTarget && analyticsTarget !== 'brand';
-  const showAnalytics = isAdmin && (analyticsIsBrand || analyticsIsDomain);
+  const handleBrandHeaderClick = () => {
+    setView((prev) => (prev === 'brand' ? null : 'brand'));
+    setCheckedIds([]);
+  };
 
-  const analyticsLabel = analyticsIsBrand
-    ? `${selectedBrand?.code} `
-    : analyticsIsDomain
-      ? analyticsTarget.domain
-      : '';
+  const handleDomainSelect = (domainItem) => {
+    setView((prev) => prev?._id === domainItem._id ? null : domainItem);
+  };
+
+  const handleDomainCompare = () => {
+    setView({ compare: 'domain', items: checkedDomains });
+  };
+
+  const handleBrandCompare = () => {
+    setView({ compare: 'brand' });
+  };
+
+  const viewIsBrand = view === 'brand';
+  const viewIsDomain = view && view !== 'brand' && !view.compare;
+  const viewIsCompare = view?.compare != null;
+  const compareMode = view?.compare;
+  const showAnalytics = viewIsBrand || viewIsDomain;
+
+  const analyticsLabel = viewIsBrand
+    ? `${selectedBrand?.code}`
+    : viewIsDomain
+    ? view.domain
+    : '';
 
   return (
     <section className="p-3 lg:p-5 space-y-4">
-      {/* Add domain form — admin only */}
       {isAdmin && (
-   <AddDomainForm
-  selectedBrand={selectedBrand}
-  onCreateDomain={onCreateDomain}
-  onRefresh={loadDomains}
-/>
+        <AddDomainForm
+          selectedBrand={selectedBrand}
+          onCreateDomain={onCreateDomain}
+          onRefresh={loadDomains}
+        />
       )}
 
       {error && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
       {selectedBrand ? (
-        <div className="space-y-4">
-          {/* Two-column layout: domains list | analytics */}
-          <div className="flex gap-4 min-h-[70vh]">
+        <div className="flex gap-4 min-h-[70vh]">
 
-            {/* ── Domain vertical list ── */}
-            <div className="w-72 shrink-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleBrandHeaderClick}
-                  className={`rounded-md px-3 py-1.5 text-sm font-bold transition ${isAdmin
-                    ? analyticsIsBrand
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-800 hover:bg-indigo-600 hover:text-white'
-                    : 'text-slate-800 cursor-default'
-                    }`}
-                >
-                  {selectedBrand.code}
-                </button>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 shrink-0">
-                  {brandDomains.length}
-                </span>
-              </div>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search domains..."
-                className="mb-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
-              />
+          {/* ── Domain vertical list ── */}
+          <div className="w-72 shrink-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="mb-2 flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={loadDomains}
-                disabled={loading}
-                className="mb-3 w-full rounded bg-slate-100 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200"
+                onClick={handleBrandHeaderClick}
+                className={`rounded-md px-3 py-1.5 text-sm font-bold transition ${
+                  viewIsBrand
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-800 hover:bg-indigo-600 hover:text-white'
+                }`}
+                title="Click to view brand analytics"
               >
-                {loading ? 'Loading…' : 'Refresh'}
+                {selectedBrand.code}
               </button>
 
-              {brandDomains.length === 0 ? (
-                <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500">
-                  {loading ? 'Loading…' : 'No domains yet.'}
-                </p>
-              ) : (
-                <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-320px)]">
-                  {brandDomains.map((item) => {
-                    const isSelected = analyticsIsDomain && analyticsTarget?._id === item._id;
-                    return (
-                      <div
-                        key={item._id}
-                        onClick={() => handleDomainSelect(item)}
-                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 transition ${isSelected
-                          ? 'border-indigo-500 bg-indigo-50'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
-                          }`}
-                      >
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-400" />
+              <button
+                type="button"
+                onClick={handleBrandCompare}
+                className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                  compareMode === 'brand'
+                    ? 'bg-black text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-indigo-600 hover:text-white'
+                }`}
+                title="Compare brands"
+              >
+                Compare
+              </button>
 
-                        <a href={toExternalUrl(item.domain)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="truncate text-sm font-medium text-indigo-700 hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {item.domain}
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 shrink-0">
+                {brandDomains.length}
+              </span>
             </div>
 
-            {/* ── Analytics panel ── */}
-            <div className="flex-1 min-w-0">
-              {showAnalytics ? (
-                <div className="rounded-lg border border-indigo-200 bg-white shadow-sm overflow-hidden h-full">
-                  <div className="flex items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-4 py-3">
-                    <div className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 shadow-sm">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-indigo-200">
-                        {analyticsIsBrand ? 'Brand Analytics' : 'Domain Analytics'}
-                      </span>
-                      <span className="h-4 w-px bg-indigo-400" />
-                      <span className="text-base font-bold text-white">{analyticsLabel}</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search domains..."
+              className="mb-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+            />
+
+            {checkedIds.length >= 2 && (
+              <button
+                type="button"
+                onClick={handleDomainCompare}
+                className={`mb-2 w-full rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                  compareMode === 'domain'
+                    ? 'bg-amber-500 text-white shadow-sm'
+                    : 'bg-amber-100 text-amber-800 hover:bg-amber-500 hover:text-white'
+                }`}
+              >
+                Compare {checkedIds.length} Domains
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={loadDomains}
+              disabled={loading}
+              className="mb-3 w-full rounded bg-slate-100 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200"
+            >
+              {loading ? 'Loading…' : 'Refresh'}
+            </button>
+
+            {brandDomains.length === 0 ? (
+              <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500">
+                {loading ? 'Loading…' : 'No domains yet.'}
+              </p>
+            ) : (
+              <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-320px)]">
+                {brandDomains.map((item) => {
+                  const isSelected = viewIsDomain && view?._id === item._id;
+                  const isChecked = checkedIds.includes(item._id);
+                  return (
+                    <div
+                      key={item._id}
+                      onClick={() => handleDomainSelect(item)}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 transition ${
+                        isSelected
+                          ? 'border-indigo-500 bg-indigo-50'
+                          : isChecked
+                          ? 'border-amber-400 bg-amber-50'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => { e.stopPropagation(); toggleCheck(item._id); }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-amber-500"
+                      />
+                      <a
+                        href={toExternalUrl(item.domain)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate text-sm font-medium text-indigo-700 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {item.domain}
+                      </a>
                     </div>
-                    <div className="ml-auto flex items-center gap-2">
-                      {analyticsIsDomain && (
-                        <button
-                          type="button"
-                          onClick={() => remove(analyticsTarget._id)}
-                          className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-200"
-                        >
-                          Delete Domain
-                        </button>
-                      )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Right panel: analytics or compare ── */}
+          <div className="flex-1 min-w-0">
+            {showAnalytics && (
+              <div className="rounded-lg border border-indigo-200 bg-white shadow-sm overflow-hidden h-full">
+                <div className="flex items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-4 py-3">
+                  <div className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 shadow-sm">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-indigo-200">
+                      {viewIsBrand ? 'Brand Analytics' : 'Domain Analytics'}
+                    </span>
+                    <span className="h-4 w-px bg-indigo-400" />
+                    <span className="text-base font-bold text-white">{analyticsLabel}</span>
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    {viewIsDomain && isAdmin && (
                       <button
                         type="button"
-                        onClick={() => setAnalyticsTarget(null)}
-                        className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-200"
+                        onClick={() => remove(view._id)}
+                        className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-200"
                       >
-                        Close
+                        Delete Domain
                       </button>
-                    </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setView(null)}
+                      className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-200"
+                    >
+                      Close
+                    </button>
                   </div>
-                  <AnalyticsInline
-                    brand={selectedBrand}
-                    domainItem={analyticsIsDomain ? analyticsTarget : null}
-                    onGetRankingHistory={onGetRankingHistory}
-                  />
                 </div>
-              ) : (
-                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-sm text-slate-500">
-                  Select a domain or click the brand name to view analytics.
+                <AnalyticsInline
+                  brand={selectedBrand}
+                  domainItem={viewIsDomain ? view : null}
+                  onGetRankingHistory={onGetRankingHistory}
+                />
+              </div>
+            )}
+
+            {viewIsCompare && (
+              <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-slate-200 bg-blue-50 px-4 py-3">
+                  <div className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 shadow-sm">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-amber-100">
+                      {compareMode === 'brand' ? 'Brand Compare' : 'Domain Compare'}
+                    </span>
+                    <span className="h-4 w-px bg-amber-300" />
+                    <span className="text-base font-bold text-white">
+                      {compareMode === 'brand' ? selectedBrand.code : `${checkedDomains.length} Domains`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setView('brand'); setCheckedIds([]); }}
+                    className="ml-auto rounded bg-red-100 px-2 py-0.5 text-xs text-red-700 hover:bg-red-200"
+                  >
+                    Close
+                  </button>
                 </div>
-              )}
-            </div>
+                <ComparePanel
+                  mode={compareMode}
+                  selectedBrand={selectedBrand}
+                  brands={brands}
+                  domainItems={compareMode === 'domain' ? view.items : []}
+                  allDomains={brandDomains}
+                  onGetRankingHistory={onGetRankingHistory}
+                />
+              </div>
+            )}
+
+            {!showAnalytics && !viewIsCompare && (
+              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-sm text-slate-500">
+                Select a domain or click the brand name to view analytics.
+              </div>
+            )}
           </div>
         </div>
       ) : (

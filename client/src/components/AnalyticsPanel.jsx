@@ -88,7 +88,7 @@ function AnalyticsPanel({ selectedBrand, data, range, onRangeChange, loading, er
                 onClick={() => onRangeChange(item.id)}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                   range === item.id
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-black text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
