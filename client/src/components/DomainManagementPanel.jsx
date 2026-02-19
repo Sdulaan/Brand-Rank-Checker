@@ -18,12 +18,18 @@ const formatBrandLabel = (brand) => {
   return `${code} - ${name}`;
 };
 
-// ─── Add-domain form ──────────────────────────────────────────────────────────
-function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
+function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onBulkCreateDomains, onDeleteDomain }) {
+  const [brandId, setBrandId] = useState('');
   const [domain, setDomain] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [bulkBrandId, setBulkBrandId] = useState('');
+  const [bulkFileName, setBulkFileName] = useState('');
+  const [bulkCsv, setBulkCsv] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -41,45 +47,15 @@ function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
     }
   };
 
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">Add Domain</h2>
-      <p className="mt-1 text-xs text-slate-500">Associate a domain with a brand.</p>
-      <form onSubmit={submit} className="mt-4 grid gap-3 lg:grid-cols-[220px_1fr_1fr_auto]">
-        <div className="flex items-center gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-3 py-2">
-          <span
-            className="h-3 w-3 shrink-0 rounded-full"
-            style={{ backgroundColor: selectedBrand?.color || '#64748b' }}
-          />
-          <span className="truncate text-sm font-semibold text-indigo-700">
-            {selectedBrand ? formatBrandLabel(selectedBrand) : 'No brand selected'}
-          </span>
-        </div>
-        <input
-          value={domain}
-          onChange={(e) => setDomain(e.target.value)}
-          placeholder="example.com"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-          required
-        />
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Note (optional)"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {submitting ? 'Adding...' : 'Add Domain'}
-        </button>
-      </form>
-      {error && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-    </div>
-  );
-}
+  useEffect(() => {
+    if (!bulkBrandId && brands.length > 0) {
+      setBulkBrandId(brands[0]._id);
+    }
+  }, [brands, bulkBrandId]);
+
+  const brandMap = useMemo(() => {
+    return new Map(brands.map((item) => [item._id, item]));
+  }, [brands]);
 
 // ─── Domain card ──────────────────────────────────────────────────────────────
 function DomainCard({ item, isSelected, onSelect, onDelete }) {
@@ -215,6 +191,56 @@ function DomainManagementPanel({
     loadDomains();
   }, []);
 
+  const submit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      await onCreateDomain({ domain, brandId, note });
+      setDomain('');
+      setNote('');
+      await loadDomains();
+    } catch (err) {
+      setError(err.message || 'Failed to add domain');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBulkFile = async (file) => {
+    setBulkResult(null);
+    setError('');
+    if (!file) return;
+    setBulkFileName(file.name || 'domains.csv');
+
+    const text = await file.text();
+    setBulkCsv(text || '');
+  };
+
+  const runBulkAdd = async () => {
+    if (!onBulkCreateDomains) {
+      setError('Bulk import is not available.');
+      return;
+    }
+    if (!bulkCsv.trim()) {
+      setError('Please choose a CSV file first.');
+      return;
+    }
+
+    setBulkSubmitting(true);
+    setError('');
+    setBulkResult(null);
+    try {
+      const result = await onBulkCreateDomains({ csv: bulkCsv, defaultBrandId: bulkBrandId });
+      setBulkResult(result);
+      await loadDomains();
+    } catch (err) {
+      setError(err.message || 'Bulk import failed');
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
   const remove = async (id) => {
     const target = domains.find((item) => item._id === id);
     if (!window.confirm(`Delete domain "${target?.domain || ''}"? This cannot be undone.`)) return;
@@ -282,25 +308,11 @@ function DomainManagementPanel({
           {/* Two-column layout: domains list | analytics */}
           <div className="flex gap-4 min-h-[70vh]">
 
-            {/* ── Domain vertical list ── */}
-            <div className="w-72 shrink-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleBrandHeaderClick}
-                  className={`rounded-md px-3 py-1.5 text-sm font-bold transition ${isAdmin
-                    ? analyticsIsBrand
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-800 hover:bg-indigo-600 hover:text-white'
-                    : 'text-slate-800 cursor-default'
-                    }`}
-                >
-                  {selectedBrand.code}
-                </button>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 shrink-0">
-                  {brandDomains.length}
-                </span>
-              </div>
+       
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold">Domains</h3>
+            <div className="flex items-center gap-2">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

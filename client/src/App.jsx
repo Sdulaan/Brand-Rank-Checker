@@ -13,6 +13,7 @@ import {
   addAdminApiKey,
   checkTopTen,
   createDomain,
+  bulkCreateDomains,
   createUser,
   deleteDomain,
   deleteAdminApiKey,
@@ -255,6 +256,7 @@ function App() {
 
   const loadDomains = () => getDomains();
   const addDomain = (payload) => createDomain(payload);
+  const bulkAddDomains = (payload) => bulkCreateDomains(payload);
   const removeDomain = (domainId) => deleteDomain(domainId);
 
   if (!authReady) {
@@ -323,6 +325,7 @@ function App() {
             isAdmin={isAdmin}
             onLoadDomains={loadDomains}
             onCreateDomain={addDomain}
+            onBulkCreateDomains={bulkAddDomains}
             onDeleteDomain={removeDomain}
             onGetRankingHistory={getRankingHistory}
           />

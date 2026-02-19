@@ -20,6 +20,7 @@ const serpResultItemSchema = new mongoose.Schema(
       domain: { type: String },
       domainHostKey: { type: String },
       domainRootKey: { type: String },
+      domainPathPrefix: { type: String },
     },
   },
   { _id: false }

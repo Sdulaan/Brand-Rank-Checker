@@ -9,6 +9,7 @@ const domainSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true, index: true },
     domainHostKey: { type: String, required: true, index: true },
     domainRootKey: { type: String, required: true, index: true },
+    domainPathPrefix: { type: String, default: '', index: true },
     tokens: [{ type: String, index: true }],
     createdBy: { type: mongoose.Schema.Types.ObjectId },
     updatedBy: { type: mongoose.Schema.Types.ObjectId },
@@ -33,12 +34,16 @@ domainSchema.pre('validate', function deriveDomainKeys(next) {
   }
 
   const keys = buildDomainKeys({ domain: this.domain });
+  if (keys.domainNormalized) {
+    this.domain = keys.domainNormalized;
+  }
   this.domainHostKey = keys.domainHostKey;
   this.domainRootKey = keys.domainRootKey;
+  this.domainPathPrefix = keys.domainPathPrefix || '';
   this.tokens = [...new Set([...(this.tokens || []), ...keys.tokens])];
   return next();
 });
 
-domainSchema.index({ brand: 1, domainHostKey: 1 }, { unique: true });
+domainSchema.index({ brand: 1, domainHostKey: 1, domainPathPrefix: 1 }, { unique: true });
 
 module.exports = mongoose.model('Domain', domainSchema);

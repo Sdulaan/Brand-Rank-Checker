@@ -36,7 +36,7 @@ const getRankingHistory = async (req, res, next) => {
     }
 
     const brandDomains = await Domain.find({ brand: brandId, isActive: true })
-      .select('domain domainHostKey')
+      .select('domain')
       .sort({ domain: 1 });
 
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -65,8 +65,8 @@ const getRankingHistory = async (req, res, next) => {
           .filter(
             (row) =>
               row.badge === 'OWN' &&
-              row.matchedDomain?.domainHostKey &&
-              row.matchedDomain.domainHostKey === domainItem.domainHostKey
+              row.matchedDomain?._id &&
+              row.matchedDomain._id.toString() === domainItem._id.toString()
           )
           .map((row) => row.rank);
 
@@ -85,7 +85,7 @@ const getRankingHistory = async (req, res, next) => {
 
       return {
         domain: domainItem.domain,
-        domainHostKey: domainItem.domainHostKey,
+        domainHostKey: domainItem._id.toString(),
         trend: movement.trend,
         delta: movement.delta,
         currentRank: last,

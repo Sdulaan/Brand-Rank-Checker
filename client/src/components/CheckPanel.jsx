@@ -28,7 +28,7 @@ const COUNTRIES = [
 function CheckPanel({ selectedBrand, onCheck, loading, error, resultEntry }) {
   const [query, setQuery] = useState('');
   const [country, setCountry] = useState('id');
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(true);
 
   useEffect(() => {
     setQuery(selectedBrand?.code || selectedBrand?.name || '');
