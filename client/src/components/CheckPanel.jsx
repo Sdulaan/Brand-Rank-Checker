@@ -25,9 +25,28 @@ const COUNTRIES = [
   { code: 'za', label: 'South Africa' },
 ];
 
+const LANGUAGES = [
+  { code: 'id', label: 'Indonesian' },
+  { code: 'en', label: 'English' },
+  { code: 'ms', label: 'Malay' },
+  { code: 'th', label: 'Thai' },
+  { code: 'vi', label: 'Vietnamese' },
+  { code: 'tl', label: 'Filipino' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'de', label: 'German' },
+  { code: 'fr', label: 'French' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'tr', label: 'Turkish' },
+];
+
 function CheckPanel({ selectedBrand, onCheck, loading, error, resultEntry }) {
   const [query, setQuery] = useState('');
   const [country, setCountry] = useState('id');
+  const [language, setLanguage] = useState('id');
   const [isMobile, setIsMobile] = useState(true);
 
   useEffect(() => {
@@ -35,13 +54,10 @@ function CheckPanel({ selectedBrand, onCheck, loading, error, resultEntry }) {
   }, [selectedBrand]);
 
   return (
-    <section className="flex-1 p-4 lg:p-6">
-      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h1 className="text-xl font-semibold">Top 10 Checker (Google by Country)</h1>
-        <p className="mt-1 text-sm text-slate-500">source: Serper | language: Indonesian</p>
-
+    <section className="flex-1 p-4 lg:p-4">
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         {selectedBrand ? (
-          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_220px_260px_auto]">
+          <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_260px_auto]">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Query</label>
               <input
@@ -66,23 +82,35 @@ function CheckPanel({ selectedBrand, onCheck, loading, error, resultEntry }) {
               </select>
             </div>
             <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Language</label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-2 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              >
+                {LANGUAGES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Device</label>
-              <div className="inline-flex rounded-md border border-slate-300 p-0.5">
+              <div className="inline-flex rounded-md border border-slate-300 p-0.5 p-1">
                 <button
                   type="button"
                   onClick={() => setIsMobile(false)}
-                  className={`rounded px-3 py-1.5 text-sm font-medium ${
-                    !isMobile ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'
-                  }`}
+                  className={`rounded px-3 py-1.5 text-sm font-medium ${!isMobile ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'
+                    }`}
                 >
                   Desktop
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsMobile(true)}
-                  className={`rounded px-3 py-1.5 text-sm font-medium ${
-                    isMobile ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'
-                  }`}
+                  className={`rounded px-3 py-1.5 text-sm font-medium ${isMobile ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'
+                    }`}
                 >
                   Mobile
                 </button>
@@ -91,7 +119,7 @@ function CheckPanel({ selectedBrand, onCheck, loading, error, resultEntry }) {
             <button
               type="button"
               disabled={loading}
-              onClick={() => onCheck({ brandId: selectedBrand._id, query, country, isMobile })}
+              onClick={() => onCheck({ brandId: selectedBrand._id, query, country, language, isMobile })}
               className="self-end rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? 'Checking...' : 'Check Top 10'}

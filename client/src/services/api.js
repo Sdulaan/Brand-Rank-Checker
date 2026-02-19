@@ -88,12 +88,6 @@ export const createDomain = (payload) =>
     body: JSON.stringify(payload),
   });
 
-export const bulkCreateDomains = (payload) =>
-  request('/api/domains/bulk', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-
 export const deleteDomain = (domainId) =>
   request(`/api/domains/${domainId}`, {
     method: 'DELETE',

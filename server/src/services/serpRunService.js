@@ -111,7 +111,6 @@ const createSerpRunService = ({ cache, keyRotationService }) => {
               domain: matchedDomain.domain,
               domainHostKey: matchedDomain.domainHostKey,
               domainRootKey: matchedDomain.domainRootKey,
-              domainPathPrefix: matchedDomain.domainPathPrefix || '',
             }
           : null,
       };

@@ -43,7 +43,6 @@ const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
   app.use(
     '/api/analytics',
     authMiddleware.authenticate,
-    authMiddleware.authorizeRoles(USER_ROLES.ADMIN),
     analyticsRoutes
   );
   app.use('/api/users', createUserRoutes(authMiddleware, USER_ROLES));

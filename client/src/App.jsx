@@ -13,7 +13,6 @@ import {
   addAdminApiKey,
   checkTopTen,
   createDomain,
-  bulkCreateDomains,
   createUser,
   deleteDomain,
   deleteAdminApiKey,
@@ -256,7 +255,6 @@ function App() {
 
   const loadDomains = () => getDomains();
   const addDomain = (payload) => createDomain(payload);
-  const bulkAddDomains = (payload) => bulkCreateDomains(payload);
   const removeDomain = (domainId) => deleteDomain(domainId);
 
   if (!authReady) {
@@ -269,7 +267,16 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 lg:flex">
-      <BrandSidebar brands={brands} selectedBrandId={selectedBrand?._id} onSelect={setSelectedBrand} />
+      <BrandSidebar
+        brands={brands}
+        selectedBrandId={selectedBrand?._id}
+        onSelect={(brand) => {
+          setSelectedBrand(brand);
+          if (tab !== 'checker' && tab !== 'domains') {
+            setTab('domains');
+          }
+        }}
+      />
 
       <main className="flex-1">
         <header className="border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
@@ -280,9 +287,8 @@ function App() {
                   key={item.id}
                   type="button"
                   onClick={() => setTab(item.id)}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold ${
-                    tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  className={`rounded-md px-3 py-2 text-sm font-semibold ${tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
                 >
                   {item.label}
                 </button>
@@ -325,7 +331,6 @@ function App() {
             isAdmin={isAdmin}
             onLoadDomains={loadDomains}
             onCreateDomain={addDomain}
-            onBulkCreateDomains={bulkAddDomains}
             onDeleteDomain={removeDomain}
             onGetRankingHistory={getRankingHistory}
           />
