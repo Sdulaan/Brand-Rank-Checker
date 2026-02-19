@@ -28,7 +28,7 @@ const getTrendBadge = (trend, delta) => {
   return { label: 'No data', className: 'bg-slate-100 text-slate-500' };
 };
 
-function AnalyticsPanel({ selectedBrand, data, range, onRangeChange, loading, error }) {
+function AnalyticsPanel({ selectedBrand, data, range, onRangeChange, loading, error, focusedDomain }) {
   const [selectedDomainHostKey, setSelectedDomainHostKey] = useState('');
 
   const rankedPoints = (data?.points || []).filter((item) => item.bestOwnRank !== null);
@@ -39,17 +39,28 @@ function AnalyticsPanel({ selectedBrand, data, range, onRangeChange, loading, er
     return a.currentRank - b.currentRank;
   });
 
+  // When focusedDomain is provided, auto-select matching domain
   useEffect(() => {
     if (!domainTrends.length) {
       setSelectedDomainHostKey('');
       return;
     }
 
+    if (focusedDomain) {
+      const match = domainTrends.find(
+        (item) => item.domain === focusedDomain || item.domainHostKey?.includes(focusedDomain)
+      );
+      if (match) {
+        setSelectedDomainHostKey(match.domainHostKey);
+        return;
+      }
+    }
+
     const exists = domainTrends.some((item) => item.domainHostKey === selectedDomainHostKey);
     if (!exists) {
       setSelectedDomainHostKey(domainTrends[0].domainHostKey);
     }
-  }, [selectedDomainHostKey, domainTrends]);
+  }, [selectedDomainHostKey, domainTrends, focusedDomain]);
 
   const selectedDomain = useMemo(
     () => domainTrends.find((item) => item.domainHostKey === selectedDomainHostKey) || null,

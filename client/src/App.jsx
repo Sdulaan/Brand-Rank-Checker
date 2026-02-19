@@ -3,7 +3,6 @@ import { io } from 'socket.io-client';
 import BrandSidebar from './components/BrandSidebar';
 import CheckPanel from './components/CheckPanel';
 import ResultsList from './components/ResultsList';
-import AnalyticsPanel from './components/AnalyticsPanel';
 import AdminPanel from './components/AdminPanel';
 import LoginPage from './components/LoginPage';
 import ProfilePanel from './components/ProfilePanel';
@@ -48,11 +47,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [analyticsRange, setAnalyticsRange] = useState('7d');
-  const [analyticsData, setAnalyticsData] = useState(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [analyticsError, setAnalyticsError] = useState('');
-
   const [adminDashboard, setAdminDashboard] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
@@ -85,15 +79,14 @@ function App() {
     if (!isAdmin) {
       return [
         { id: 'checker', label: 'Manual Checker' },
-        { id: 'domains', label: 'Domains' },
+        { id: 'domains', label: 'Brands' },
         { id: 'profile', label: 'My Profile' },
       ];
     }
 
     return [
       { id: 'checker', label: 'Manual Checker' },
-      { id: 'domains', label: 'Domains' },
-      { id: 'analytics', label: 'Ranking Analytics' },
+      { id: 'domains', label: 'Brands & Analytics' },
       { id: 'admin', label: 'Admin Config' },
       { id: 'domain-logs', label: 'Domain Logs' },
       { id: 'users', label: 'User Management' },
@@ -154,25 +147,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    const loadAnalytics = async () => {
-      if (!isAdmin) return;
-      if (tab !== 'analytics' || !selectedBrand?._id) return;
-      setAnalyticsLoading(true);
-      setAnalyticsError('');
-      try {
-        const data = await getRankingHistory(selectedBrand._id, analyticsRange);
-        setAnalyticsData(data);
-      } catch (err) {
-        setAnalyticsError(err.message || 'Failed to load analytics');
-      } finally {
-        setAnalyticsLoading(false);
-      }
-    };
-
-    loadAnalytics();
-  }, [tab, selectedBrand?._id, analyticsRange, isAdmin]);
 
   const refreshAdminDashboard = async ({ showLoader = true } = {}) => {
     if (!isAdmin) return;
@@ -345,20 +319,12 @@ function App() {
         {tab === 'domains' && (
           <DomainManagementPanel
             brands={brands}
+            selectedBrand={selectedBrand}
+            isAdmin={isAdmin}
             onLoadDomains={loadDomains}
             onCreateDomain={addDomain}
             onDeleteDomain={removeDomain}
-          />
-        )}
-
-        {isAdmin && tab === 'analytics' && (
-          <AnalyticsPanel
-            selectedBrand={selectedBrand}
-            data={analyticsData}
-            range={analyticsRange}
-            onRangeChange={setAnalyticsRange}
-            loading={analyticsLoading}
-            error={analyticsError}
+            onGetRankingHistory={getRankingHistory}
           />
         )}
 
