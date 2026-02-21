@@ -25,7 +25,7 @@ const API_BASE_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
   (typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? ''
-    : 'https://url-rank-checker.onrender.com');
+    : 'http://168.231.122.240:4000');
 
 const request = async (path, options = {}) => {
   const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path;
