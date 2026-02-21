@@ -10,6 +10,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const { createAuthMiddleware } = require('./middleware/auth');
 const { USER_ROLES } = require('./models/User');
+const scheduleRoutes = require('./routes/scheduleRoutes');
 
 const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
   const app = express();
@@ -18,7 +19,7 @@ const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
 
   app.use(cors({
     origin: [
-      'https://url-rank-checker.vercel.app', // No trailing slash
+      'https://url-rank-checker.vercel.app',
       'http://localhost:5173',
     ],
     credentials: true,
@@ -30,7 +31,6 @@ const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
   });
 
   app.use('/api/auth', createAuthRoutes(authController, authMiddleware));
-
   app.use('/api/brands', authMiddleware.authenticate, brandRoutes);
   app.use('/api/domains', authMiddleware.authenticate, domainRoutes);
   app.use('/api/serp', authMiddleware.authenticate, createSerpRoutes(serpController));
@@ -40,12 +40,9 @@ const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
     authMiddleware.authorizeRoles(USER_ROLES.ADMIN),
     adminRoutes
   );
-  app.use(
-    '/api/analytics',
-    authMiddleware.authenticate,
-    analyticsRoutes
-  );
+  app.use('/api/analytics', authMiddleware.authenticate, analyticsRoutes);
   app.use('/api/users', createUserRoutes(authMiddleware, USER_ROLES));
+  app.use('/api/schedules', scheduleRoutes);
 
   app.use((err, req, res, next) => {
     console.error(err);

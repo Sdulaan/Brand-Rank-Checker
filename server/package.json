@@ -16,6 +16,7 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.9.3",
+    "node-cron": "^4.2.1",
     "psl": "^1.9.0",
     "serp-brand-dashboard": "file:..",
     "socket.io": "^4.8.3",

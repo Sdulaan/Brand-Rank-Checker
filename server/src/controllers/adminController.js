@@ -1,5 +1,6 @@
 ﻿const SerpRun = require('../models/SerpRun');
 const { ensureSettings, getSanitizedSettings } = require('../services/adminSettingsService');
+const scheduler = require('../services/schedulerService'); // ← replaces autoCheckScheduler
 
 const toNumber = (value) => {
   const parsed = Number(value);
@@ -215,7 +216,8 @@ const getAdminDashboard = async (req, res, next) => {
       })
     );
 
-    const schedulerStatus = req.app.locals.autoCheckScheduler?.getStatus?.() || null;
+    // ── Uses new schedulerService directly instead of req.app.locals.autoCheckScheduler
+    const schedulerStatus = scheduler.getStatus();
 
     return res.json({
       settings: getSanitizedSettings(settings),
@@ -239,12 +241,8 @@ const getAdminDashboard = async (req, res, next) => {
 
 const runAutoNow = async (req, res, next) => {
   try {
-    const scheduler = req.app.locals.autoCheckScheduler;
-    if (!scheduler) {
-      return res.status(500).json({ error: 'Auto check scheduler unavailable' });
-    }
-
-    await scheduler.runNowDetached();
+    // ── Uses new schedulerService directly instead of req.app.locals.autoCheckScheduler
+    scheduler.runNowDetached();
     notifyAdminUpdate(req, { source: 'run-now' });
     return res.status(202).json({ ok: true, started: true, schedulerStatus: scheduler.getStatus() });
   } catch (error) {
@@ -257,11 +255,7 @@ const runAutoNow = async (req, res, next) => {
 
 const stopAutoRun = async (req, res, next) => {
   try {
-    const scheduler = req.app.locals.autoCheckScheduler;
-    if (!scheduler) {
-      return res.status(500).json({ error: 'Auto check scheduler unavailable' });
-    }
-
+    // ── Uses new schedulerService directly instead of req.app.locals.autoCheckScheduler
     const stopRequested = scheduler.requestStop();
     notifyAdminUpdate(req, { source: 'stop-run' });
     return res.json({ ok: true, stopRequested, schedulerStatus: scheduler.getStatus() });

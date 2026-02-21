@@ -8,8 +8,8 @@ const { InMemoryCache } = require('./services/cacheService');
 const { parseEnvKeys, ensureSettings, applyBaselineFromEnv } = require('./services/adminSettingsService');
 const { createKeyRotationService } = require('./services/keyRotationService');
 const { createSerpRunService } = require('./services/serpRunService');
-const { createAutoCheckScheduler } = require('./services/autoCheckScheduler');
 const { ensureInitialAdmin } = require('./services/userBootstrapService');
+const scheduler = require('./services/schedulerService'); // ← replaces autoCheckScheduler
 
 const bootstrap = async () => {
   await connectDb(env.mongoUri);
@@ -52,12 +52,12 @@ const bootstrap = async () => {
   };
   app.locals.emitAdminUpdate = emitAdminUpdate;
 
-  const scheduler = createAutoCheckScheduler({
+  // ── Init schedulerService with serpRunService + socket.io status push ──────
+  scheduler.init({
     serpRunService,
     onStatusChange: () => emitAdminUpdate({ source: 'scheduler' }),
   });
-  app.locals.autoCheckScheduler = scheduler;
-  scheduler.start();
+  scheduler.restoreSchedules();
 
   server.listen(env.port, () => {
     console.log(`Server running on port ${env.port}`);
