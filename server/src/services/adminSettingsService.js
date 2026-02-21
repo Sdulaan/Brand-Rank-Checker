@@ -1,4 +1,5 @@
-﻿const AdminSettings = require('../models/AdminSettings');
+const AdminSettings = require('../models/AdminSettings');
+const { hoursToMinutes, minutesToHours, normalizeAllowedIntervalMinutes } = require('./scheduleTimeService');
 
 const DEFAULT_INTERVAL_HOURS = 1;
 
@@ -28,8 +29,22 @@ const ensureSettings = async ({ envKeys = [] } = {}) => {
     return settings;
   }
 
+  let shouldSave = false;
+
+  const normalizedHours = minutesToHours(
+    normalizeAllowedIntervalMinutes(hoursToMinutes(settings.checkIntervalHours || DEFAULT_INTERVAL_HOURS))
+  );
+  if (Math.abs(Number(settings.checkIntervalHours || 0) - normalizedHours) > 1e-9) {
+    settings.checkIntervalHours = normalizedHours;
+    shouldSave = true;
+  }
+
   if (!settings.serpApiKeys?.length && envKeys.length) {
     settings.serpApiKeys = envKeys;
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
     await settings.save();
   }
 
@@ -66,8 +81,12 @@ const getSanitizedSettings = (settings) => {
     _id: settings._id,
     autoCheckEnabled: settings.autoCheckEnabled,
     checkIntervalHours: settings.checkIntervalHours,
+    checkIntervalMinutes: normalizeAllowedIntervalMinutes(
+      hoursToMinutes(settings.checkIntervalHours || DEFAULT_INTERVAL_HOURS)
+    ),
     lastAutoCheckAt: settings.lastAutoCheckAt,
     nextAutoCheckAt: settings.nextAutoCheckAt,
+    autoCheckStartedBy: settings.autoCheckStartedBy || null,
     serpApiKeys: (settings.serpApiKeys || []).map((item) => ({
       _id: item._id,
       name: item.name,
@@ -92,3 +111,4 @@ module.exports = {
   applyBaselineFromEnv,
   getSanitizedSettings,
 };
+

@@ -1,12 +1,24 @@
-﻿const SerpRun = require('../models/SerpRun');
+const SerpRun = require('../models/SerpRun');
+const { DomainActivityLog, DOMAIN_ACTIVITY_ACTIONS } = require('../models/DomainActivityLog');
 const { ensureSettings, getSanitizedSettings } = require('../services/adminSettingsService');
+const {
+  MIN_INTERVAL_MINUTES,
+  MAX_INTERVAL_MINUTES,
+  minutesToHours,
+  hoursToMinutes,
+  isAllowedIntervalMinutes,
+  getNextScheduledAt,
+} = require('../services/scheduleTimeService');
 
 const toNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
-const MIN_INTERVAL_HOURS = 5 / 60;
 const notifyAdminUpdate = (req, payload = {}) => req.app.locals.emitAdminUpdate?.(payload);
+const getLogLimit = (queryLimit) => {
+  const limitRaw = Number(queryLimit);
+  return Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 100;
+};
 
 const getAdminSettings = async (req, res, next) => {
   try {
@@ -22,24 +34,58 @@ const updateSchedule = async (req, res, next) => {
     const settings = await ensureSettings();
     const enabled = req.body.autoCheckEnabled;
     const intervalHours = toNumber(req.body.checkIntervalHours);
+    const intervalMinutes = toNumber(req.body.checkIntervalMinutes);
+    const effectiveIntervalMinutes = intervalMinutes !== null ? intervalMinutes : hoursToMinutes(intervalHours);
+    const intervalChanged = intervalMinutes !== null || intervalHours !== null;
+
+    // Time changes require restarting auto-check (stop then run) to take effect.
+    if (intervalChanged && settings.autoCheckEnabled && enabled !== false) {
+      return res.status(409).json({
+        error: 'Stop auto check and run again to apply time change',
+      });
+    }
 
     if (typeof enabled === 'boolean') {
+      const wasEnabled = settings.autoCheckEnabled;
       settings.autoCheckEnabled = enabled;
-      if (enabled && !settings.nextAutoCheckAt) {
-        settings.nextAutoCheckAt = new Date(Date.now() + (settings.checkIntervalHours || 1) * 60 * 60 * 1000);
+      if (enabled) {
+        settings.nextAutoCheckAt = getNextScheduledAt(new Date(), hoursToMinutes(settings.checkIntervalHours));
+        settings.autoCheckStartedBy = req.user?._id || settings.autoCheckStartedBy || null;
+      }
+      if (!wasEnabled && enabled) {
+        await DomainActivityLog.create({
+          action: DOMAIN_ACTIVITY_ACTIONS.AUTO_START,
+          domain: 'AUTO-CHECK',
+          domainHostKey: 'auto-check',
+          note: `Auto-check started (${hoursToMinutes(settings.checkIntervalHours)} min interval)`,
+          actor: req.user?._id || null,
+          metadata: {
+            intervalMinutes: hoursToMinutes(settings.checkIntervalHours),
+            nextAutoCheckAt: settings.nextAutoCheckAt,
+          },
+        });
       }
       if (!enabled) {
         settings.nextAutoCheckAt = null;
+        settings.autoCheckStartedBy = null;
       }
     }
 
-    if (intervalHours !== null) {
-      if (intervalHours < MIN_INTERVAL_HOURS || intervalHours > 24) {
-        return res.status(400).json({ error: 'checkIntervalHours must be between 5 minutes and 24 hours' });
+    if (intervalChanged) {
+      if (effectiveIntervalMinutes < MIN_INTERVAL_MINUTES || effectiveIntervalMinutes > MAX_INTERVAL_MINUTES) {
+        return res.status(400).json({
+          error: `checkIntervalMinutes must be between ${MIN_INTERVAL_MINUTES} and ${MAX_INTERVAL_MINUTES}`,
+        });
       }
-      settings.checkIntervalHours = intervalHours;
+      if (!isAllowedIntervalMinutes(effectiveIntervalMinutes)) {
+        return res.status(400).json({
+          error: 'checkIntervalMinutes must be one of: 15, 30, 60',
+        });
+      }
+
+      settings.checkIntervalHours = minutesToHours(effectiveIntervalMinutes);
       if (settings.autoCheckEnabled) {
-        settings.nextAutoCheckAt = new Date(Date.now() + intervalHours * 60 * 60 * 1000);
+        settings.nextAutoCheckAt = getNextScheduledAt(new Date(), effectiveIntervalMinutes);
       }
     }
 
@@ -171,40 +217,19 @@ const getAdminDashboard = async (req, res, next) => {
 
     const tokenSummary = await Promise.all(
       (settings.serpApiKeys || []).map(async (item) => {
-        const totalRequests = getCountFromRows(keyUsageRowsMonth, item);
+        const totalRequestsMonth = getCountFromRows(keyUsageRowsMonth, item);
         const totalRequestsLifetime = getCountFromRows(keyUsageRowsLifetime, item);
-        const remainingEstimated = Math.max(monthlyLimit - totalRequests, 0);
-        const remainingReported = item.lastKnownRemaining;
-
-        const hasBaseline =
-          Number.isFinite(item.baselineRemaining) && item.baselineCapturedAt instanceof Date;
-
-        let remainingDisplay = remainingEstimated;
-        let requestsDisplay = totalRequests;
-
-        if (hasBaseline) {
-          const baselineFilter = {
-            checkedAt: { $gte: item.baselineCapturedAt },
-            $or: [{ keyId: item._id }, { keyId: null, keyName: item.name }],
-          };
-          const requestsSinceBaseline = await SerpRun.countDocuments(baselineFilter);
-
-          remainingDisplay = Math.max(item.baselineRemaining - requestsSinceBaseline, 0);
-          requestsDisplay = monthlyLimit - remainingDisplay;
-        } else if (typeof remainingReported === 'number' && Number.isFinite(remainingReported)) {
-          remainingDisplay = remainingReported;
-          requestsDisplay = monthlyLimit - remainingDisplay;
-        }
+        const remainingDisplay = Math.max(monthlyLimit - totalRequestsLifetime, 0);
 
         return {
           _id: item._id,
           name: item.name,
           isActive: item.isActive,
           monthlyLimit,
-          totalRequests: requestsDisplay,
+          totalRequests: totalRequestsMonth,
           totalRequestsLifetime,
-          remainingEstimated,
-          remainingReported,
+          remainingEstimated: remainingDisplay,
+          remainingReported: null,
           remainingDisplay,
           baselineRemaining: item.baselineRemaining,
           baselineCapturedAt: item.baselineCapturedAt,
@@ -262,9 +287,35 @@ const stopAutoRun = async (req, res, next) => {
       return res.status(500).json({ error: 'Auto check scheduler unavailable' });
     }
 
+    const settings = await ensureSettings();
+    const wasEnabled = settings.autoCheckEnabled;
+    settings.autoCheckEnabled = false;
+    settings.nextAutoCheckAt = null;
+    const previousStartedBy = settings.autoCheckStartedBy;
+    settings.autoCheckStartedBy = null;
+    await settings.save();
+
+    if (wasEnabled || scheduler.getStatus()?.isRunning) {
+      await DomainActivityLog.create({
+        action: DOMAIN_ACTIVITY_ACTIONS.AUTO_STOP,
+        domain: 'AUTO-CHECK',
+        domainHostKey: 'auto-check',
+        note: 'Auto-check stopped',
+        actor: req.user?._id || previousStartedBy || null,
+        metadata: {
+          stopRequestedWhileRunning: scheduler.getStatus()?.isRunning || false,
+        },
+      });
+    }
+
     const stopRequested = scheduler.requestStop();
     notifyAdminUpdate(req, { source: 'stop-run' });
-    return res.json({ ok: true, stopRequested, schedulerStatus: scheduler.getStatus() });
+    return res.json({
+      ok: true,
+      stopRequested,
+      schedulerStatus: scheduler.getStatus(),
+      settings: getSanitizedSettings(settings),
+    });
   } catch (error) {
     return next(error);
   }
@@ -272,11 +323,37 @@ const stopAutoRun = async (req, res, next) => {
 
 const getDomainActivityLogs = async (req, res, next) => {
   try {
-    const { DomainActivityLog } = require('../models/DomainActivityLog');
-    const limitRaw = Number(req.query.limit);
-    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 100;
+    const limit = getLogLimit(req.query.limit);
 
-    const logs = await DomainActivityLog.find({})
+    const logs = await DomainActivityLog.find({
+      action: {
+        $in: [DOMAIN_ACTIVITY_ACTIONS.ADD, DOMAIN_ACTIVITY_ACTIONS.DELETE],
+      },
+    })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('brand', 'code name')
+      .populate('actor', 'username email role');
+
+    return res.json(logs);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getAutoCheckLogs = async (req, res, next) => {
+  try {
+    const limit = getLogLimit(req.query.limit);
+
+    const logs = await DomainActivityLog.find({
+      action: {
+        $in: [
+          DOMAIN_ACTIVITY_ACTIONS.AUTO_START,
+          DOMAIN_ACTIVITY_ACTIONS.AUTO_STOP,
+          DOMAIN_ACTIVITY_ACTIONS.AUTO_CHECK,
+        ],
+      },
+    })
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate('brand', 'code name')
@@ -298,4 +375,6 @@ module.exports = {
   runAutoNow,
   stopAutoRun,
   getDomainActivityLogs,
+  getAutoCheckLogs,
 };
+

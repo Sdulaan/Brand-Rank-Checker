@@ -1,4 +1,6 @@
-﻿const AdminSettings = require('../models/AdminSettings');
+const AdminSettings = require('../models/AdminSettings');
+const { DomainActivityLog, DOMAIN_ACTIVITY_ACTIONS } = require('../models/DomainActivityLog');
+const { hoursToMinutes, getNextScheduledAt } = require('./scheduleTimeService');
 
 const POLL_INTERVAL_MS = 30 * 1000;
 
@@ -13,18 +15,22 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
   let lastRunSummary = null;
   let lastError = null;
   let progress = { processedBrands: 0, totalBrands: 0, brandCode: null };
+  let recentRuns = [];
 
-  const computeNextRunAt = (hours) => new Date(Date.now() + hours * 60 * 60 * 1000);
+  const computeNextRunAt = (hours, baseTime = new Date()) =>
+    getNextScheduledAt(baseTime, hoursToMinutes(hours));
   const notifyStatusChange = () => onStatusChange(getStatus());
 
   const setRunStart = (source) => {
+    const startedAt = new Date();
     isRunning = true;
     stopRequested = false;
     progress = { processedBrands: 0, totalBrands: 0, brandCode: null };
-    lastRunStartedAt = new Date();
+    lastRunStartedAt = startedAt;
     lastRunSource = source;
     lastError = null;
     notifyStatusChange();
+    return startedAt;
   };
 
   const setRunFinish = ({ summary, error }) => {
@@ -33,6 +39,19 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
 
     if (summary) {
       lastRunSummary = summary;
+      recentRuns = [
+        {
+          startedAt: summary.startedAt || lastRunStartedAt,
+          finishedAt: lastRunFinishedAt,
+          failCount: summary.failCount || 0,
+          okCount: summary.okCount || 0,
+          totalBrands: summary.totalBrands || 0,
+          stopped: !!summary.stopped,
+          source: summary.source || null,
+          failureReasons: Array.isArray(summary.failureReasons) ? summary.failureReasons : [],
+        },
+        ...recentRuns,
+      ].slice(0, 100);
     }
 
     if (error) {
@@ -43,7 +62,7 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
   };
 
   const runAutoCheck = async ({ source }) => {
-    setRunStart(source);
+    const startedAt = setRunStart(source);
 
     try {
       const { outcomes, stopped } = await serpRunService.runAutoCheckForAllBrands({
@@ -55,18 +74,24 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
       });
       const okCount = outcomes.filter((item) => item.ok).length;
       const failCount = outcomes.length - okCount;
+      const failureReasons = outcomes
+        .filter((item) => !item.ok)
+        .slice(0, 5)
+        .map((item) => `${item.brandCode || 'unknown'}: ${item.error || 'Unknown error'}`);
 
       setRunFinish({
         summary: {
           source,
+          startedAt,
           totalBrands: outcomes.length,
           okCount,
           failCount,
           stopped,
+          failureReasons,
         },
       });
 
-      return { outcomes, stopped };
+      return { outcomes, stopped, startedAt };
     } catch (error) {
       setRunFinish({ error });
       throw error;
@@ -80,14 +105,48 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
       const settings = await AdminSettings.findOne();
       if (!settings || !settings.autoCheckEnabled) return;
 
+      if (!settings.nextAutoCheckAt) {
+        settings.nextAutoCheckAt = computeNextRunAt(settings.checkIntervalHours || 1);
+        await settings.save();
+        return;
+      }
+
       const now = new Date();
       const shouldRun = !settings.nextAutoCheckAt || settings.nextAutoCheckAt <= now;
       if (!shouldRun) return;
 
-      await runAutoCheck({ source: 'scheduler' });
+      const scheduledAt = settings.nextAutoCheckAt ? new Date(settings.nextAutoCheckAt) : now;
+      const { outcomes } = await runAutoCheck({ source: 'scheduler' });
 
-      settings.lastAutoCheckAt = now;
-      settings.nextAutoCheckAt = computeNextRunAt(settings.checkIntervalHours || 1);
+      try {
+        const runSettings = await AdminSettings.findOne().select('autoCheckStartedBy');
+        const actorId = runSettings?.autoCheckStartedBy || null;
+        const logRows = outcomes.map((item) => ({
+          action: DOMAIN_ACTIVITY_ACTIONS.AUTO_CHECK,
+          domain: 'AUTO-CHECK',
+          domainHostKey: 'auto-check',
+          note: item.ok
+            ? `Auto-check success for ${item.brandCode}`
+            : `Auto-check failed for ${item.brandCode}: ${item.error || 'Unknown error'}`,
+          brand: item.brandId || null,
+          actor: actorId,
+          metadata: {
+            source: 'scheduler',
+            ok: item.ok,
+            checkedAt: item.checkedAt || null,
+            error: item.error || null,
+            brandCode: item.brandCode || null,
+          },
+        }));
+        if (logRows.length) {
+          await DomainActivityLog.insertMany(logRows, { ordered: false });
+        }
+      } catch (logError) {
+        console.error('Auto-check activity log write failed:', logError.message);
+      }
+
+      settings.lastAutoCheckAt = new Date();
+      settings.nextAutoCheckAt = computeNextRunAt(settings.checkIntervalHours || 1, scheduledAt);
       await settings.save();
     } catch (error) {
       console.error('Auto-check scheduler tick failed:', error.message);
@@ -105,9 +164,35 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
 
     const settings = await AdminSettings.findOne();
     if (settings) {
+      try {
+        const actorId = settings.autoCheckStartedBy || null;
+        const logRows = (result.outcomes || []).map((item) => ({
+          action: DOMAIN_ACTIVITY_ACTIONS.AUTO_CHECK,
+          domain: 'AUTO-CHECK',
+          domainHostKey: 'auto-check',
+          note: item.ok
+            ? `Auto-check success for ${item.brandCode}`
+            : `Auto-check failed for ${item.brandCode}: ${item.error || 'Unknown error'}`,
+          brand: item.brandId || null,
+          actor: actorId,
+          metadata: {
+            source: 'manual',
+            ok: item.ok,
+            checkedAt: item.checkedAt || null,
+            error: item.error || null,
+            brandCode: item.brandCode || null,
+          },
+        }));
+        if (logRows.length) {
+          await DomainActivityLog.insertMany(logRows, { ordered: false });
+        }
+      } catch (logError) {
+        console.error('Manual auto-check activity log write failed:', logError.message);
+      }
+
       settings.lastAutoCheckAt = new Date();
       settings.nextAutoCheckAt = settings.autoCheckEnabled
-        ? computeNextRunAt(settings.checkIntervalHours || 1)
+        ? computeNextRunAt(settings.checkIntervalHours || 1, result.startedAt || lastRunStartedAt || new Date())
         : null;
       await settings.save();
     }
@@ -160,6 +245,7 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
     lastRunSummary,
     lastError,
     progress,
+    recentRuns,
   });
 
   return {
@@ -176,3 +262,4 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
 module.exports = {
   createAutoCheckScheduler,
 };
+

@@ -9,6 +9,7 @@ import ProfilePanel from './components/ProfilePanel';
 import UserManagementPanel from './components/UserManagementPanel';
 import DomainManagementPanel from './components/DomainManagementPanel';
 import DomainActivityLogPanel from './components/DomainActivityLogPanel';
+import AutoCheckLogPanel from './components/AutoCheckLogPanel';
 import UserDashboard from './components/UserDashboard';
 import {
   addAdminApiKey,
@@ -21,12 +22,12 @@ import {
   getAuthToken,
   getBrands,
   getDomainActivityLogs,
+  getAutoCheckLogs,
   getDomains,
   getMe,
   getRankingHistory,
   getUsers,
   login,
-  runAutoNow,
   setAuthToken,
   stopAutoRun,
   updateAdminApiKey,
@@ -95,6 +96,7 @@ function App() {
       { id: 'domains', label: 'Brands & Analytics' },
       { id: 'admin', label: 'Admin Config' },
       { id: 'domain-logs', label: 'Domain Logs' },
+      { id: 'auto-check-logs', label: 'Auto Check Logs' },
       { id: 'users', label: 'User Management' },
       { id: 'profile', label: 'My Profile' },
     ];
@@ -257,13 +259,19 @@ function App() {
     }
   };
 
-  const triggerAutoRun = async () => {
+  const triggerStartAutoRun = async () => {
     setAutoRunActionLoading(true);
     try {
-      await runAutoNow();
+      const intervalMinutes =
+        Number(adminDashboard?.settings?.checkIntervalMinutes) ||
+        Math.round((Number(adminDashboard?.settings?.checkIntervalHours) || 1) * 60);
+      await updateAdminSchedule({
+        autoCheckEnabled: true,
+        checkIntervalMinutes: intervalMinutes,
+      });
       await refreshAdminDashboard();
     } catch (err) {
-      setAdminError(err.message || 'Failed to run auto check now');
+      setAdminError(err.message || 'Failed to start auto check');
     } finally {
       setAutoRunActionLoading(false);
     }
@@ -388,7 +396,7 @@ function App() {
             onAddKey={addApiKey}
             onUpdateKey={updateApiKey}
             onDeleteKey={removeApiKey}
-            onRunNow={triggerAutoRun}
+            onStartAutoCheck={triggerStartAutoRun}
             onStopRun={triggerStopAutoRun}
             runActionLoading={autoRunActionLoading}
           />
@@ -400,6 +408,10 @@ function App() {
 
         {isAdmin && tab === 'domain-logs' && (
           <DomainActivityLogPanel onLoadLogs={getDomainActivityLogs} />
+        )}
+
+        {isAdmin && tab === 'auto-check-logs' && (
+          <AutoCheckLogPanel onLoadLogs={getAutoCheckLogs} />
         )}
 
         {tab === 'profile' && (

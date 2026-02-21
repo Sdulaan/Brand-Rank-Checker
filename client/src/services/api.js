@@ -107,6 +107,8 @@ export const getAdminSettings = () => request('/api/admin/settings');
 export const getAdminDashboard = () => request('/api/admin/dashboard');
 export const getDomainActivityLogs = (limit = 100) =>
   request(`/api/admin/domain-logs?${toQueryString({ limit })}`);
+export const getAutoCheckLogs = (limit = 100) =>
+  request(`/api/admin/auto-check-logs?${toQueryString({ limit })}`);
 
 export const updateAdminSchedule = (payload) =>
   request('/api/admin/settings/schedule', {

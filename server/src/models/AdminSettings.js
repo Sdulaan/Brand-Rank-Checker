@@ -1,6 +1,7 @@
 ﻿const mongoose = require('mongoose');
 
-const MIN_INTERVAL_HOURS = 5 / 60;
+const MIN_INTERVAL_HOURS = 15 / 60;
+const MAX_INTERVAL_HOURS = 60 / 60;
 
 const serpApiKeySchema = new mongoose.Schema(
   {
@@ -21,9 +22,10 @@ const serpApiKeySchema = new mongoose.Schema(
 const adminSettingsSchema = new mongoose.Schema(
   {
     autoCheckEnabled: { type: Boolean, default: false },
-    checkIntervalHours: { type: Number, default: 1, min: MIN_INTERVAL_HOURS, max: 24 },
+    checkIntervalHours: { type: Number, default: 1, min: MIN_INTERVAL_HOURS, max: MAX_INTERVAL_HOURS },
     lastAutoCheckAt: { type: Date, default: null },
     nextAutoCheckAt: { type: Date, default: null },
+    autoCheckStartedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     activeKeyCursor: { type: Number, default: 0 },
     serpApiKeys: { type: [serpApiKeySchema], default: [] },
   },

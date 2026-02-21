@@ -1,31 +1,112 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
+
+const INDONESIA_TIME_ZONE = 'Asia/Jakarta';
 
 const formatDateTime = (value) => {
   if (!value) return '-';
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleString('id-ID', {
+    timeZone: INDONESIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
 };
-const INTERVAL_OPTIONS = [
-  { value: '0.08333333333333333', label: 'Every 5 minutes (Testing)' },
-  { value: '1', label: 'Every 1 hour' },
-  { value: '2', label: 'Every 2 hours' },
-  { value: '3', label: 'Every 3 hours' },
-  { value: '4', label: 'Every 4 hours' },
-  { value: '6', label: 'Every 6 hours' },
-  { value: '12', label: 'Every 12 hours' },
-  { value: '24', label: 'Every 24 hours' },
-];
 
-const getAutoState = (settings, schedulerStatus) => {
-  if (!settings?.autoCheckEnabled) {
-    return {
-      code: 'disabled',
-      title: 'Auto Check Disabled',
-      description: 'Scheduler is off. No automatic checks will run.',
-      badgeClass: 'bg-slate-200 text-slate-800',
-      panelClass: 'border-slate-300 bg-slate-50',
-    };
+const formatClock = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleTimeString('id-ID', {
+    timeZone: INDONESIA_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+
+const toMinuteKey = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return Math.floor(date.getTime() / 60000);
+};
+
+const getIntervalMinutes = (settings) => {
+  const direct = Number(settings?.checkIntervalMinutes);
+  if (Number.isFinite(direct)) {
+    const normalized = Math.max(15, Math.min(60, Math.round(direct)));
+    if (normalized === 15 || normalized === 30 || normalized === 60) return normalized;
+    return 60;
   }
 
+  const fromHours = Number(settings?.checkIntervalHours);
+  if (Number.isFinite(fromHours)) {
+    const normalized = Math.max(15, Math.min(60, Math.round(fromHours * 60)));
+    if (normalized === 15 || normalized === 30 || normalized === 60) return normalized;
+    return 60;
+  }
+
+  return 60;
+};
+
+const buildSchedulePreview = (settings, schedulerStatus) => {
+  const intervalMinutes = getIntervalMinutes(settings);
+  const slotMs = intervalMinutes * 60 * 1000;
+  const now = new Date();
+  const nowMs = now.getTime();
+  const previousSlots = 2;
+  const nextSlotsIn12Hours = Math.ceil((12 * 60) / intervalMinutes);
+  const currentSlotMs = Math.floor(nowMs / slotMs) * slotMs;
+  const startMs = currentSlotMs - previousSlots * slotMs;
+  const recentRunStatusBySlot = new Map();
+  (schedulerStatus?.recentRuns || []).forEach((run) => {
+    const startedAt = run?.startedAt ? new Date(run.startedAt) : null;
+    if (!startedAt || Number.isNaN(startedAt.getTime())) return;
+    const slotStartMs = Math.floor(startedAt.getTime() / slotMs) * slotMs;
+    const slotKey = toMinuteKey(new Date(slotStartMs));
+    if (slotKey === null || recentRunStatusBySlot.has(slotKey)) return;
+    const status = run.stopped ? 'Stopped' : Number(run.failCount || 0) > 0 ? 'Failure' : 'Success';
+    const tooltip =
+      status === 'Failure'
+        ? ((run.failureReasons || []).length
+            ? (run.failureReasons || []).join(' | ')
+            : 'Run failed. See Auto Check Logs for details.')
+        : '';
+    recentRunStatusBySlot.set(slotKey, { status, tooltip });
+  });
+  const nextAutoKey = toMinuteKey(settings?.nextAutoCheckAt);
+
+  return Array.from({ length: previousSlots + nextSlotsIn12Hours + 1 }, (_, index) => {
+    const slotAt = new Date(startMs + index * slotMs);
+    const slotKey = toMinuteKey(slotAt);
+
+    let status = 'Scheduled';
+    let tooltip = '';
+    if (slotKey !== null && recentRunStatusBySlot.has(slotKey)) {
+      const slotMeta = recentRunStatusBySlot.get(slotKey);
+      status = slotMeta.status;
+      tooltip = slotMeta.tooltip || '';
+    } else if (slotAt <= now) {
+      status = 'Pending';
+    }
+
+    if (settings?.autoCheckEnabled && nextAutoKey !== null && slotKey === nextAutoKey) {
+      status = 'Next';
+    }
+
+    return {
+      key: `${slotAt.toISOString()}-${status}`,
+      at: slotAt,
+      status,
+      tooltip,
+    };
+  });
+};
+
+const INTERVAL_OPTIONS = [15, 30, 60];
+
+const getAutoState = (settings, schedulerStatus) => {
   if (schedulerStatus?.isRunning && schedulerStatus?.stopRequested) {
     return {
       code: 'stopping',
@@ -43,6 +124,16 @@ const getAutoState = (settings, schedulerStatus) => {
       description: 'System is currently checking brands in background.',
       badgeClass: 'bg-emerald-100 text-emerald-800',
       panelClass: 'border-emerald-300 bg-emerald-50',
+    };
+  }
+
+  if (!settings?.autoCheckEnabled) {
+    return {
+      code: 'disabled',
+      title: 'Auto Check Stopped',
+      description: 'Scheduler is stopped. No automatic checks will run.',
+      badgeClass: 'bg-slate-200 text-slate-800',
+      panelClass: 'border-slate-300 bg-slate-50',
     };
   }
 
@@ -72,11 +163,11 @@ function AdminPanel({
   loading,
   error,
   onSaveSchedule,
+  onStartAutoCheck,
+  onStopRun,
   onAddKey,
   onUpdateKey,
   onDeleteKey,
-  onRunNow,
-  onStopRun,
   runActionLoading,
 }) {
   const settings = dashboard?.settings;
@@ -84,12 +175,11 @@ function AdminPanel({
   const schedulerStatus = dashboard?.schedulerStatus;
   const autoState = getAutoState(settings, schedulerStatus);
   const progress = schedulerStatus?.progress || { processedBrands: 0, totalBrands: 0, brandCode: null };
-  const selectedIntervalValue = (() => {
-    const current = Number(settings?.checkIntervalHours);
-    if (!Number.isFinite(current)) return '1';
-    const matched = INTERVAL_OPTIONS.find((item) => Math.abs(Number(item.value) - current) < 1e-9);
-    return matched ? matched.value : String(current);
-  })();
+  const selectedIntervalValue = String(getIntervalMinutes(settings));
+  const schedulePreview = buildSchedulePreview(settings, schedulerStatus);
+  const INITIAL_SLOT_COUNT = 14;
+  const [showAllSlots, setShowAllSlots] = useState(false);
+  const visibleSchedule = showAllSlots ? schedulePreview : schedulePreview.slice(0, INITIAL_SLOT_COUNT);
 
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
@@ -104,55 +194,43 @@ function AdminPanel({
           {error && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
           {settings && (
-            <div className="mt-4 grid gap-3 lg:grid-cols-[200px_200px_auto]">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.autoCheckEnabled}
+            <div className="mt-4 grid gap-3 lg:grid-cols-[220px_auto]">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">Checking Frequency</label>
+                <select
+                  value={selectedIntervalValue}
                   onChange={(e) =>
                     onSaveSchedule({
-                      autoCheckEnabled: e.target.checked,
-                      checkIntervalHours: settings.checkIntervalHours,
+                      checkIntervalMinutes: Number(e.target.value),
                     })
                   }
-                />
-                Auto check enabled
-              </label>
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                >
+                  {INTERVAL_OPTIONS.map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      Every {minutes} minutes
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              <select
-                value={selectedIntervalValue}
-                onChange={(e) =>
-                  onSaveSchedule({
-                    autoCheckEnabled: settings.autoCheckEnabled,
-                    checkIntervalHours: Number(e.target.value),
-                  })
-                }
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              >
-                {INTERVAL_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-
-              {schedulerStatus?.isRunning ? (
+              {(settings.autoCheckEnabled || schedulerStatus?.isRunning) ? (
                 <button
                   type="button"
                   onClick={onStopRun}
                   disabled={runActionLoading || schedulerStatus?.stopRequested}
-                  className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-fit rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {schedulerStatus?.stopRequested ? 'Stopping...' : runActionLoading ? 'Processing...' : 'Stop Process'}
+                  {schedulerStatus?.stopRequested ? 'Stopping...' : runActionLoading ? 'Processing...' : 'Stop Auto Check'}
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={onRunNow}
+                  onClick={onStartAutoCheck}
                   disabled={runActionLoading}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-fit rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {runActionLoading ? 'Processing...' : 'Run Auto Check Now'}
+                  {runActionLoading ? 'Processing...' : 'Run Auto Check'}
                 </button>
               )}
             </div>
@@ -164,12 +242,13 @@ function AdminPanel({
                 <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${autoState.badgeClass}`}>
                   {autoState.title}
                 </span>
-                <span className="text-slate-700">{autoState.description}</span>
+                <span className="text-slate-700">{autoState.description} (WIB)</span>
               </div>
 
               <div className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
                 <p>Last Auto Check: {formatDateTime(settings.lastAutoCheckAt)}</p>
                 <p>Next Auto Check: {formatDateTime(settings.nextAutoCheckAt)}</p>
+                <p>Auto Process: {settings.autoCheckEnabled ? 'Running' : 'Stopped'}</p>
                 <p>Runtime: {schedulerStatus?.isRunning ? 'Running' : 'Idle'}</p>
                 <p>Last start: {formatDateTime(schedulerStatus?.lastRunStartedAt)}</p>
                 <p>Last finish: {formatDateTime(schedulerStatus?.lastRunFinishedAt)}</p>
@@ -187,6 +266,52 @@ function AdminPanel({
                     : '-'}
                 </p>
                 <p>Current brand: {schedulerStatus?.isRunning ? progress.brandCode || '-' : '-'}</p>
+              </div>
+
+              <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Schedule Window (WIB: Previous 2 + Next 12 Hours)</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Success</span>
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">Failure</span>
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">Next</span>
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">Pending</span>
+                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-orange-700">Stopped</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">Scheduled</span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                  {visibleSchedule.map((item) => (
+                    <div key={item.key} className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                      <p className="text-xs font-semibold text-slate-700">{formatClock(item.at)}</p>
+                      <span
+                        title={item.status === 'Failure' ? item.tooltip : ''}
+                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs ${
+                          item.status === 'Success'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : item.status === 'Failure'
+                              ? 'bg-rose-100 text-rose-700'
+                              : item.status === 'Stopped'
+                                ? 'bg-orange-100 text-orange-700'
+                              : item.status === 'Next'
+                                ? 'bg-blue-100 text-blue-700'
+                                : item.status === 'Pending'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {schedulePreview.length > INITIAL_SLOT_COUNT && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSlots((prev) => !prev)}
+                    className="mt-3 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                  >
+                    {showAllSlots ? 'Show Less' : `Show More (${schedulePreview.length - INITIAL_SLOT_COUNT} more)`}
+                  </button>
+                )}
               </div>
 
               {schedulerStatus?.lastError && (
@@ -235,7 +360,6 @@ function AdminPanel({
                   <th className="px-3 py-2 text-left">Plan (Month)</th>
                   <th className="px-3 py-2 text-left">Requests (Month)</th>
                   <th className="px-3 py-2 text-left">Requests (Lifetime)</th>
-                  <th className="px-3 py-2 text-left">Reported Remaining</th>
                   <th className="px-3 py-2 text-left">Last Used</th>
                   <th className="px-3 py-2 text-left">Exhausted At</th>
                   <th className="px-3 py-2 text-left">Last Error</th>
@@ -256,7 +380,6 @@ function AdminPanel({
                       <td className="px-3 py-2">{item.monthlyLimit ?? '-'}</td>
                       <td className="px-3 py-2">{item.totalRequests ?? 0}</td>
                       <td className="px-3 py-2">{item.totalRequestsLifetime ?? 0}</td>
-                      <td className="px-3 py-2">{item.remainingReported ?? '-'}</td>
                       <td className="px-3 py-2 text-xs">{formatDateTime(item.lastUsedAt)}</td>
                       <td className="px-3 py-2 text-xs">{formatDateTime(item.exhaustedAt)}</td>
                       <td className="px-3 py-2 text-xs text-rose-700">{item.lastError || '-'}</td>
@@ -291,7 +414,7 @@ function AdminPanel({
             )}
             {tokenRows.length > 0 && (
               <p className="mt-2 text-xs text-slate-500">
-                Remaining (Month) = Plan (Month) - Requests (Month). Reported Remaining is latest value returned by Serper.
+                Remaining (Month) = Plan (Month) - Requests (Lifetime).
               </p>
             )}
           </div>

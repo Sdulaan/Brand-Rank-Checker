@@ -339,15 +339,11 @@ function DomainManagementPanel({
                         onClick={(e) => e.stopPropagation()}
                         className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-amber-500"
                       />
-                      <a
-                        href={toExternalUrl(item.domain)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="truncate text-sm font-medium text-indigo-700 hover:underline"
-                        onClick={(e) => e.stopPropagation()}
+                      <span
+                        className="truncate text-sm font-medium text-indigo-700"
                       >
                         {item.domain}
-                      </a>
+                      </span>
                     </div>
                   );
                 })}
@@ -367,6 +363,33 @@ function DomainManagementPanel({
                     <span className="h-4 w-px bg-indigo-400" />
                     <span className="text-base font-bold text-white">{analyticsLabel}</span>
                   </div>
+                  {viewIsDomain && (
+                    <a
+                      href={toExternalUrl(view.domain)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Go to Page"
+                      aria-label="Go to Page"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M14 3h7v7" />
+                        <path d="M10 14 21 3" />
+                        <path d="M21 14v7h-7" />
+                        <path d="M3 10V3h7" />
+                        <path d="M3 21h7v-7" />
+                      </svg>
+                    </a>
+                  )}
                   <div className="ml-auto flex items-center gap-2">
                     {viewIsDomain && isAdmin && (
                       <button
