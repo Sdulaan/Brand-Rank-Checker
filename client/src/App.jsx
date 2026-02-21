@@ -16,6 +16,7 @@ import {
   checkTopTen,
   createDomain,
   createUser,
+  deleteUser,
   deleteDomain,
   deleteAdminApiKey,
   getAdminDashboard,
@@ -32,6 +33,7 @@ import {
   stopAutoRun,
   updateAdminApiKey,
   updateAdminSchedule,
+  updateUser,
   updateMyPassword,
   updateMyProfile,
 } from './services/api';
@@ -125,27 +127,31 @@ function App() {
     if (!brands.length || tab !== 'dashboard') return;
 
     const loadDashboardBrands = async () => {
-      const domainList = await getDomains();
-      setTotalDomains(domainList.length);
-      const enriched = await Promise.all(
-        brands.map(async (brand) => {
-          try {
-            const history = await getRankingHistory(brand._id, '1d');
-            const points = (history.points || []).filter((p) => p.bestOwnRank !== null);
-            const latest = points[points.length - 1];
-            return {
-              ...brand,
-              currentRank: latest?.bestOwnRank ?? null,
-              delta: history.delta ?? null,
-              trend: history.trend ?? null,
-              lastChecked: latest?.checkedAt ?? null,
-            };
-          } catch {
-            return { ...brand, currentRank: null, delta: null, trend: null, lastChecked: null };
-          }
-        })
-      );
-      setDashboardBrands(enriched);
+      try {
+        const domainList = await getDomains();
+        setTotalDomains(domainList.length);
+        const enriched = await Promise.all(
+          brands.map(async (brand) => {
+            try {
+              const history = await getRankingHistory(brand._id, '1d');
+              const points = (history.points || []).filter((p) => p.bestOwnRank !== null);
+              const latest = points[points.length - 1];
+              return {
+                ...brand,
+                currentRank: latest?.bestOwnRank ?? null,
+                delta: history.delta ?? null,
+                trend: history.trend ?? null,
+                lastChecked: latest?.checkedAt ?? null,
+              };
+            } catch {
+              return { ...brand, currentRank: null, delta: null, trend: null, lastChecked: null };
+            }
+          })
+        );
+        setDashboardBrands(enriched);
+      } catch (err) {
+        setError(err.message || 'Failed to load dashboard data');
+      }
     };
 
     loadDashboardBrands();
@@ -294,6 +300,9 @@ function App() {
     setCurrentUser(me);
   };
 
+  const handleAdminUpdateUser = (userId, payload) => updateUser(userId, payload);
+  const handleAdminDeleteUser = (userId) => deleteUser(userId);
+
   const loadDomains = () => getDomains();
   const addDomain = (payload) => createDomain(payload);
   const removeDomain = (domainId) => deleteDomain(domainId);
@@ -403,7 +412,12 @@ function App() {
         )}
 
         {isAdmin && tab === 'users' && (
-          <UserManagementPanel onLoadUsers={getUsers} onCreateUser={createUser} />
+          <UserManagementPanel
+            onLoadUsers={getUsers}
+            onCreateUser={createUser}
+            onUpdateUser={handleAdminUpdateUser}
+            onDeleteUser={handleAdminDeleteUser}
+          />
         )}
 
         {isAdmin && tab === 'domain-logs' && (

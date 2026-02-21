@@ -78,6 +78,17 @@ export const createUser = (payload) =>
     body: JSON.stringify(payload),
   });
 
+export const updateUser = (userId, payload) =>
+  request(`/api/users/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+export const deleteUser = (userId) =>
+  request(`/api/users/${userId}`, {
+    method: 'DELETE',
+  });
+
 export const getBrands = () => request(`/api/brands?${toQueryString({ active: true })}`);
 
 export const getDomains = (params = {}) => request(`/api/domains?${toQueryString(params)}`);
