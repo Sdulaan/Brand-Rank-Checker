@@ -22,9 +22,10 @@ export const setAuthToken = (token) => {
 export const getAuthToken = () => authToken;
 
 const API_BASE_URL =
-  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? ''
-    : 'https://url-rank-checker.onrender.com';
+    : 'https://url-rank-checker.onrender.com');
 
 const request = async (path, options = {}) => {
   const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path;
@@ -112,6 +113,9 @@ export const checkTopTen = (payload) =>
 
 export const getRankingHistory = (brandId, range) =>
   request(`/api/analytics/brands/${brandId}/ranking-history?${toQueryString({ range })}`);
+
+export const getRecentAutoChecks = (brandId, limit = 5) =>
+  request(`/api/analytics/brands/${brandId}/recent-auto-checks?${toQueryString({ limit })}`);
 
 export const getAdminSettings = () => request('/api/admin/settings');
 

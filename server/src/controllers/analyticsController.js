@@ -114,6 +114,65 @@ const getRankingHistory = async (req, res, next) => {
   }
 };
 
+const getRecentAutoChecks = async (req, res, next) => {
+  try {
+    const brandId = req.params.brandId;
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(20, limitRaw)) : 5;
+
+    const brand = await Brand.findById(brandId).select('_id code name color');
+    if (!brand) {
+      return res.status(404).json({ error: 'Brand not found' });
+    }
+
+    const rawRuns = await SerpRun.find({ brand: brandId, trigger: 'auto' })
+      .sort({ checkedAt: -1 })
+      .limit(limit * 8)
+      .select('checkedAt query bestOwnRank ownCount competitorCount unknownCount results');
+
+    // Deduplicate same-round runs (same minute) so dashboard shows unique auto-check rounds.
+    const seenRoundKeys = new Set();
+    const runs = [];
+    for (const run of rawRuns) {
+      const at = run?.checkedAt ? new Date(run.checkedAt) : null;
+      if (!at || Number.isNaN(at.getTime())) continue;
+      const minuteKey = Math.floor(at.getTime() / 60000);
+      if (seenRoundKeys.has(minuteKey)) continue;
+      seenRoundKeys.add(minuteKey);
+      runs.push(run);
+      if (runs.length >= limit) break;
+    }
+
+    return res.json({
+      brand: {
+        _id: brand._id,
+        code: brand.code,
+        name: brand.name,
+        color: brand.color,
+      },
+      runs: runs.map((run) => ({
+        _id: run._id,
+        checkedAt: run.checkedAt,
+        query: run.query,
+        bestOwnRank: run.bestOwnRank,
+        ownCount: run.ownCount,
+        competitorCount: run.competitorCount,
+        unknownCount: run.unknownCount,
+        results: (run.results || []).map((row) => ({
+          rank: row.rank,
+          title: row.title,
+          domainHost: row.domainHost,
+          badge: row.badge,
+          link: row.link,
+        })),
+      })),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   getRankingHistory,
+  getRecentAutoChecks,
 };

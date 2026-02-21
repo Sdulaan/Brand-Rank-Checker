@@ -27,6 +27,7 @@ import {
   getDomains,
   getMe,
   getRankingHistory,
+  getRecentAutoChecks,
   getUsers,
   login,
   setAuthToken,
@@ -40,6 +41,15 @@ import {
 
 function App() {
   const socketUrl = import.meta.env.VITE_SOCKET_URL || (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://url-rank-checker.onrender.com');;
+  const getWibClock = () => ({
+    time: new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    }).format(new Date()),
+  });
 
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -55,6 +65,7 @@ function App() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
   const [autoRunActionLoading, setAutoRunActionLoading] = useState(false);
+  const [wibClock, setWibClock] = useState(getWibClock());
 
   // Dashboard enriched brands state
   const [dashboardBrands, setDashboardBrands] = useState([]);
@@ -133,7 +144,10 @@ function App() {
         const enriched = await Promise.all(
           brands.map(async (brand) => {
             try {
-              const history = await getRankingHistory(brand._id, '1d');
+              const [history, recentAutoChecksPayload] = await Promise.all([
+                getRankingHistory(brand._id, '1d'),
+                getRecentAutoChecks(brand._id, 5),
+              ]);
               const points = (history.points || []).filter((p) => p.bestOwnRank !== null);
               const latest = points[points.length - 1];
               return {
@@ -142,9 +156,17 @@ function App() {
                 delta: history.delta ?? null,
                 trend: history.trend ?? null,
                 lastChecked: latest?.checkedAt ?? null,
+                recentAutoChecks: recentAutoChecksPayload?.runs || [],
               };
             } catch {
-              return { ...brand, currentRank: null, delta: null, trend: null, lastChecked: null };
+              return {
+                ...brand,
+                currentRank: null,
+                delta: null,
+                trend: null,
+                lastChecked: null,
+                recentAutoChecks: [],
+              };
             }
           })
         );
@@ -228,6 +250,13 @@ function App() {
       socket.disconnect();
     };
   }, [tab, socketUrl, isAdmin]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setWibClock(getWibClock());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const saveSchedule = async (payload) => {
     try {
@@ -347,6 +376,14 @@ function App() {
               ))}
             </div>
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
+                  WIB
+                </span>
+                <div className="leading-tight">
+                  <p className="font-mono text-sm font-bold text-slate-900">{wibClock.time}</p>
+                </div>
+              </div>
               <span className="text-xs text-slate-600">
                 {currentUser.username} ({currentUser.role})
               </span>
