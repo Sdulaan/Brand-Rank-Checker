@@ -140,7 +140,8 @@ function AnalyticsInline({ brand, domainItem, onGetRankingHistory }) {
 function DomainManagementPanel({
   brands,
   selectedBrand,
-  isAdmin,
+  canAddDomains,
+  canDeleteDomains,
   onLoadDomains,
   onCreateDomain,
   onDeleteDomain,
@@ -240,7 +241,7 @@ function DomainManagementPanel({
 
   return (
     <section className="p-3 lg:p-5 space-y-4">
-      {isAdmin && (
+      {canAddDomains && (
         <AddDomainForm
           selectedBrand={selectedBrand}
           onCreateDomain={onCreateDomain}
@@ -397,7 +398,7 @@ function DomainManagementPanel({
                     </a>
                   )}
                   <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-                    {viewIsDomain && isAdmin && (
+                    {viewIsDomain && canDeleteDomains && (
                       <button
                         type="button"
                         onClick={() => remove(view._id)}

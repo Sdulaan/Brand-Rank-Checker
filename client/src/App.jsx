@@ -107,6 +107,16 @@ function App() {
   const isManager = currentUser?.role === 'manager';
   const canAccessAdminConfig = isAdmin || isManager;
   const canManageUsers = isAdmin;
+  const adminConfigMenuItems = useMemo(() => {
+    const items = [{ id: 'rank-check', label: 'Rank Check Config' }];
+    if (isAdmin) {
+      items.push(
+        { id: 'backup', label: 'Backup Config' },
+        { id: 'notifications', label: 'Notifications Config' }
+      );
+    }
+    return items;
+  }, [isAdmin]);
 
   const tabs = useMemo(() => {
     if (!canAccessAdminConfig) {
@@ -248,7 +258,7 @@ function App() {
   };
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canAccessAdminConfig) return;
     if (tab === 'admin') {
       refreshAdminDashboard({ showLoader: true });
     }
@@ -568,39 +578,20 @@ function App() {
                         adminMenuOpen ? 'visible opacity-100' : 'invisible opacity-0'
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab('admin');
-                          setAdminConfigView('rank-check');
-                          setAdminMenuOpen(false);
-                        }}
-                        className="block w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                      >
-                        Rank Check Config
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab('admin');
-                          setAdminConfigView('backup');
-                          setAdminMenuOpen(false);
-                        }}
-                        className="block w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                      >
-                        Backup Config
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab('admin');
-                          setAdminConfigView('notifications');
-                          setAdminMenuOpen(false);
-                        }}
-                        className="block w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                      >
-                        Notifications Config
-                      </button>
+                      {adminConfigMenuItems.map((menuItem) => (
+                        <button
+                          key={menuItem.id}
+                          type="button"
+                          onClick={() => {
+                            setTab('admin');
+                            setAdminConfigView(menuItem.id);
+                            setAdminMenuOpen(false);
+                          }}
+                          className="block w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          {menuItem.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 );
@@ -686,7 +677,8 @@ function App() {
           <DomainManagementPanel
             brands={brands}
             selectedBrand={selectedBrand}
-            isAdmin={isAdmin}
+            canAddDomains={isAdmin || isManager}
+            canDeleteDomains={isAdmin}
             onLoadDomains={loadDomains}
             onCreateDomain={addDomain}
             onDeleteDomain={removeDomain}
@@ -716,6 +708,7 @@ function App() {
             onTestNotificationTelegram={triggerTestNotificationTelegram}
             notificationTestLoading={notificationTestLoading}
             sectionView={adminConfigView}
+            isManager={isManager}
           />
         )}
 

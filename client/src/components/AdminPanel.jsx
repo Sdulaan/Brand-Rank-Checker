@@ -203,6 +203,7 @@ function AdminPanel({
   onTestNotificationTelegram,
   notificationTestLoading,
   sectionView = 'all',
+  isManager = false,
 }) {
   const settings = dashboard?.settings;
   const tokenRows = dashboard?.tokens || [];
@@ -262,9 +263,9 @@ function AdminPanel({
   const notificationDailyDigestTimeWib = settings?.notificationDailyDigestTimeWib || '23:00';
   const notificationBotTokenConfigured = !!settings?.notificationTelegramBotTokenConfigured;
   const notificationBotTokenMasked = settings?.notificationTelegramBotTokenMasked || '';
-  const showRankSection = sectionView === 'all' || sectionView === 'rank-check';
-  const showBackupSection = sectionView === 'all' || sectionView === 'backup';
-  const showNotificationSection = sectionView === 'all' || sectionView === 'notifications';
+  const showRankSection = !isManager && (sectionView === 'all' || sectionView === 'rank-check');
+  const showBackupSection = !isManager && (sectionView === 'all' || sectionView === 'backup');
+  const showNotificationSection = !isManager && (sectionView === 'all' || sectionView === 'notifications');
   const showApiSection = sectionView === 'all' || sectionView === 'rank-check';
 
   const currentChatIds = (settings?.backupTelegramChatIds || []).join(', ');
