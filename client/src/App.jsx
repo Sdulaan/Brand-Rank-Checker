@@ -11,6 +11,7 @@ import DomainManagementPanel from './components/DomainManagementPanel';
 import DomainActivityLogPanel from './components/DomainActivityLogPanel';
 import AutoCheckLogPanel from './components/AutoCheckLogPanel';
 import UserDashboard from './components/UserDashboard';
+import BulkDomainCheckerPanel from './components/BulkDomainCheckerPanel';
 import Flag from 'react-world-flags';
 import {
   addAdminApiKey,
@@ -123,6 +124,7 @@ function App() {
       return [
         { id: 'dashboard', label: 'Dashboard' },
         { id: 'checker', label: 'Manual Checker' },
+        { id: 'bulk-checker', label: 'Bulk Domain Checker' },
         { id: 'domains', label: 'Brands & Analytics' },
         { id: 'profile', label: 'My Profile' },
       ];
@@ -131,6 +133,7 @@ function App() {
     const adminTabs = [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'checker', label: 'Manual Checker' },
+      { id: 'bulk-checker', label: 'Bulk Domain Checker' },
       { id: 'domains', label: 'Brands & Analytics' },
       { id: 'admin', label: 'Admin Config' },
       { id: 'domain-logs', label: 'Domain Logs' },
@@ -433,7 +436,7 @@ function App() {
   const handleAdminUpdateUser = (userId, payload) => updateUser(userId, payload);
   const handleAdminDeleteUser = (userId) => deleteUser(userId);
   const userInitial = (currentUser?.username || 'U').trim().charAt(0).toUpperCase();
-  const mobilePrimaryTabIds = ['dashboard', 'checker', 'domains'];
+  const mobilePrimaryTabIds = ['dashboard', 'bulk-checker', 'domains'];
   const mobilePrimaryTabs = mobilePrimaryTabIds
     .map((id) => tabs.find((item) => item.id === id))
     .filter(Boolean);
@@ -637,16 +640,18 @@ function App() {
       </header>
 
       <div className="lg:flex">
-        <BrandSidebar
-          brands={brands}
-          selectedBrandId={selectedBrand?._id}
-          onSelect={(brand) => {
-            setSelectedBrand(brand);
-            if (tab !== 'dashboard' && tab !== 'checker' && tab !== 'domains') {
-              setTab('domains');
-            }
-          }}
-        />
+        {tab !== 'bulk-checker' && (
+          <BrandSidebar
+            brands={brands}
+            selectedBrandId={selectedBrand?._id}
+            onSelect={(brand) => {
+              setSelectedBrand(brand);
+              if (tab !== 'dashboard' && tab !== 'checker' && tab !== 'domains') {
+                setTab('domains');
+              }
+            }}
+          />
+        )}
 
         <main className="flex-1">
         {tab === 'dashboard' && (
@@ -672,6 +677,8 @@ function App() {
             </section>
           </>
         )}
+
+        {tab === 'bulk-checker' && <BulkDomainCheckerPanel />}
 
         {tab === 'domains' && (
           <DomainManagementPanel

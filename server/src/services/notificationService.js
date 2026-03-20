@@ -115,9 +115,10 @@ const buildActiveRankingLines = (comparisons) => {
       return `- ${brandCode}: ${formatRank(currentRank)} (=)`;
     }
     if (currentRank < previousRank) {
-      return `- ${brandCode}: ${formatRank(previousRank)} → ${formatRank(currentRank)} (▲${previousRank - currentRank})`;
+      return `- ${brandCode}: ${formatRank(previousRank)} → ${formatRank(currentRank)} (▼${previousRank - currentRank})`;
     }
-    return `- ${brandCode}: ${formatRank(previousRank)} → ${formatRank(currentRank)} (▼${currentRank - previousRank})`;
+    // Don't show improvements in notifications
+    return `- ${brandCode}: ${formatRank(currentRank)}`;
   });
 };
 
@@ -273,19 +274,11 @@ const buildHourlyMessage = ({ comparisons, latestByBrandCode, now }) => {
   const foundCount = activeLines.length;
   const notFoundCount = s.notFound.length;
 
-  // Trend section
-  const prevLabel = buildPreviousSnapshotLabel(comparisons);
-  const currLabel = buildSnapshotLabel(comparisons);
-  const hasChanges = s.improved.length > 0 || s.dropped.length > 0;
-  const prevClock = getPreviousHourClock(now);
-  const currClock = getWibClock(now);
-
   const lines = [
-    `⏱️ Hourly Check — ${currClock}`,
+    `⏱️ Hourly Check — ${getWibClock(now)}`,
     '━━━━━━━━━━━━━━━━',
     `🏷️ ${comparisons.length} Brands Checked`,
     `✅ No change: ${s.noChangeCount} brand${s.noChangeCount !== 1 ? 's' : ''}`,
-    `📈 Improved: ${shortList(s.improved, '-')}`,
     `📉 Dropped: ${shortList(s.dropped, '-')}`,
     `❌ Not Found: ${notFoundCount} brand${notFoundCount !== 1 ? 's' : ''}`,
     `🏆 Leading: ${s.leading ? `${s.leading.brandCode} ${s.leading.ownCount || 0}/10 (${s.leading.bestOwnRank ? `#${s.leading.bestOwnRank}` : 'No rank'})` : '-'}`,
@@ -293,56 +286,100 @@ const buildHourlyMessage = ({ comparisons, latestByBrandCode, now }) => {
     '━━━━━━━━━━━━━━━━',
     `📋 Active Rankings (${foundCount} found)`,
     ...(foundCount > 0 ? activeLines : ['- None found this hour']),
-    '',
-    '━━━━━━━━━━━━━━━━',
-    '📊 Recent Trend',
-    `${prevClock} → ${prevLabel}`,
-    `${currClock} → ${currLabel}`,
-    hasChanges ? `📝 Changes: ${[...s.improved, ...s.dropped].join(', ')}` : '📝 No changes this hour',
     '━━━━━━━━━━━━━━━━',
   ];
 
   return lines.join('\n');
 };
 
-const buildInstantAlerts = ({ comparisons, threshold, alertOnDrop, alertOnNotFound, now }) => {
+const buildInstantAlerts = ({ comparisons, alertOnDrop, alertOnNotFound, now }) => {
   const alerts = [];
 
   comparisons.forEach((item) => {
     const previousRank = item.previousRank;
     const currentRank = item.currentRank;
 
-    if (alertOnNotFound && previousRank !== null && currentRank === null) {
-      alerts.push(
-        [
-          `🚨 Alert — ${item.brandCode}`,
+    // Skip improvements - only handle drops
+    if (previousRank !== null && currentRank !== null && currentRank < previousRank) {
+      return;
+    }
+
+    // Top 3 CRITICAL: Domain dropped from top 3 to outside top 3
+    if (alertOnDrop && previousRank !== null && previousRank <= 3) {
+      if (currentRank === null || currentRank > 3) {
+        alerts.push({
+          tier: 'critical',
+          message: [
+            `🔴 CRITICAL ALERT — ${item.brandCode}`,
+            '━━━━━━━━━━━━━━━━',
+            `⚠️ ${item.primaryDomain || item.brandCode} dropped from Top 3`,
+            `🔑 Keyword: "${item.query || item.brandCode}"`,
+            `📊 Was: #${previousRank} → Now: ${currentRank === null ? 'Not found' : `#${currentRank}`}`,
+            `🕐 ${getWibClock(now)}`,
+            '━━━━━━━━━━━━━━━━',
+          ].join('\n'),
+        });
+        return;
+      }
+    }
+
+    // Top 5 MEDIUM CRITICAL: Domain dropped from top 5 to outside top 5
+    if (alertOnDrop && previousRank !== null && previousRank <= 5 && previousRank > 3) {
+      if (currentRank === null || currentRank > 5) {
+        alerts.push({
+          tier: 'medium',
+          message: [
+            `🟠 MEDIUM ALERT — ${item.brandCode}`,
+            '━━━━━━━━━━━━━━━━',
+            `⚠️ ${item.primaryDomain || item.brandCode} dropped from Top 5`,
+            `🔑 Keyword: "${item.query || item.brandCode}"`,
+            `📊 Was: #${previousRank} → Now: ${currentRank === null ? 'Not found' : `#${currentRank}`}`,
+            `🕐 ${getWibClock(now)}`,
+            '━━━━━━━━━━━━━━━━',
+          ].join('\n'),
+        });
+        return;
+      }
+    }
+
+    // Top 10 LESSER CRITICAL: Domain dropped from top 10 to outside top 10
+    if (alertOnDrop && previousRank !== null && previousRank <= 10 && previousRank > 5) {
+      if (currentRank === null || currentRank > 10) {
+        alerts.push({
+          tier: 'low',
+          message: [
+            `🟡 ALERT — ${item.brandCode}`,
+            '━━━━━━━━━━━━━━━━',
+            `⚠️ ${item.primaryDomain || item.brandCode} dropped from Top 10`,
+            `🔑 Keyword: "${item.query || item.brandCode}"`,
+            `📊 Was: #${previousRank} → Now: ${currentRank === null ? 'Not found' : `#${currentRank}`}`,
+            `🕐 ${getWibClock(now)}`,
+            '━━━━━━━━━━━━━━━━',
+          ].join('\n'),
+        });
+        return;
+      }
+    }
+
+    // Alert when domain was not found (previous was ranked, now not found)
+    if (alertOnNotFound && previousRank !== null && currentRank === null && previousRank > 10) {
+      alerts.push({
+        tier: 'info',
+        message: [
+          `ℹ️ Alert — ${item.brandCode}`,
           '━━━━━━━━━━━━━━━━',
-          `❌ ${item.primaryDomain || item.brandCode} dropped out of Top 10`,
+          `❌ ${item.primaryDomain || item.brandCode} no longer found`,
           `🔑 Keyword: "${item.query || item.brandCode}"`,
           `📉 Was: #${previousRank} → Now: Not found`,
           `🕐 ${getWibClock(now)}`,
           '━━━━━━━━━━━━━━━━',
-        ].join('\n')
-      );
-      return;
-    }
-
-    if (alertOnDrop && previousRank !== null && currentRank !== null && currentRank - previousRank >= threshold) {
-      alerts.push(
-        [
-          `🚨 Alert — ${item.brandCode}`,
-          '━━━━━━━━━━━━━━━━',
-          `📉 Major drop detected`,
-          `🔑 Keyword: "${item.query || item.brandCode}"`,
-          `📊 #${previousRank} → #${currentRank} (▼${currentRank - previousRank})`,
-          `🕐 ${getWibClock(now)}`,
-          '━━━━━━━━━━━━━━━━',
-        ].join('\n')
-      );
+        ].join('\n'),
+      });
     }
   });
 
-  return alerts.slice(0, 8);
+  // Extract just the message text and limit to 8 alerts
+  return alerts.slice(0, 8).map((alert) => alert.message);
 };
 
 const buildDailyDigest = ({ runsToday, intervalMinutes, now }) => {
@@ -497,10 +534,8 @@ const createNotificationService = ({ telegramBotToken = '' } = {}) => {
     const wibParts = getWibDateParts(now);
 
     if (settings.notificationInstantEnabled) {
-      const threshold = clamp(settings.notificationInstantDropThreshold, 1, 10, 3);
       const instantAlerts = buildInstantAlerts({
         comparisons,
-        threshold,
         alertOnDrop: settings.notificationAlertOnDrop !== false,
         alertOnNotFound: settings.notificationAlertOnNotFound !== false,
         now,

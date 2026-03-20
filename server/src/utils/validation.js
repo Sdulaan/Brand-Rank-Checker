@@ -33,7 +33,15 @@ const serpCheckSchema = z.object({
   isMobile: z.boolean().optional(),
 });
 
+const bulkDomainCheckSchema = z.object({
+  domains: z.string().trim().min(1),
+  minResults: z.coerce.number().int().min(1).max(100).optional(),
+  country: supportedCountrySchema.optional(),
+  isMobile: z.boolean().optional(),
+});
+
 module.exports = {
   mongoIdSchema,
   serpCheckSchema,
+  bulkDomainCheckSchema,
 };

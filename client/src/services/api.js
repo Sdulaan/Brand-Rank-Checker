@@ -107,6 +107,26 @@ export const checkTopTen = (payload) =>
     body: JSON.stringify(payload),
   });
 
+export const checkBulkDomains = (payload) =>
+  request('/api/serp/bulk-check', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const startBulkDomainCheck = (payload) =>
+  request('/api/serp/bulk-check/start', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const getBulkDomainCheck = (runId) =>
+  request(`/api/serp/bulk-check/${runId}`);
+
+export const stopBulkDomainCheck = (runId) =>
+  request(`/api/serp/bulk-check/${runId}/stop`, {
+    method: 'POST',
+  });
+
 export const getRankingHistory = (brandId, range) =>
   request(`/api/analytics/brands/${brandId}/ranking-history?${toQueryString({ range })}`);
 
